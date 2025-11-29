@@ -1,1 +1,17 @@
-#Conection data to conect to the docker postgress file for recorded data
+apiVersion: 1
+
+datasources:
+  - name: Netprobe2-Postgres
+    type: postgres
+    access: proxy
+    isDefault: true
+    editable: true
+    url: db:5432
+    database: netprobe
+    user: netprobe
+    secureJsonData:
+      password: netprobe_password_change_me
+    jsonData:
+      sslmode: "disable"
+      postgresVersion: 1600
+      timescaledb: false
