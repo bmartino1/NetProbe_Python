@@ -1,1 +1,51 @@
-#copse example file latter....
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    container_name: np2-db
+    restart: always
+    environment:
+      POSTGRES_DB: netprobe
+      POSTGRES_USER: netprobe
+      POSTGRES_PASSWORD: netprobe_password_change_me
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - netprobe2
+
+  grafana:
+    image: grafana/grafana-enterprise:latest
+    container_name: np2-grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: change_me
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - db
+    networks:
+      - netprobe2
+
+  probe:
+    build: ./probe
+    container_name: np2-probe
+    restart: always
+    env_file:
+      - ./probe/config.env
+    depends_on:
+      - db
+    networks:
+      - netprobe2
+
+networks:
+  netprobe2:
+    driver: bridge
+
+volumes:
+  db_data:
+  grafana_data:
