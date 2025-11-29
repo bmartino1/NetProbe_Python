@@ -42,6 +42,16 @@ services:
     networks:
       - netprobe2
 
+  valkey:
+    image: valkey/valkey:latest
+    container_name: np2-valkey
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - netprobe2
+
+
 networks:
   netprobe2:
     driver: bridge
