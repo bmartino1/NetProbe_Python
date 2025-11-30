@@ -3,9 +3,6 @@
   <head>
     <meta charset="utf-8" />
     <title>Netprobe 2.0 – Internet Quality</title>
-    <!--  Went Inline code -->
-    <!--  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> -->
-    <!--  <script src="{{ url_for('static', filename='main.js') }}"></script> -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       :root {
@@ -20,6 +17,68 @@
       }
       .page {
         padding: 16px;
+      }
+      .status-panel {
+        background: #181818;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+      }
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .status-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .status-info {
+        display: flex;
+        gap: 10px;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+      }
+      .badge {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #222;
+      }
+      .status-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button.btn {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: none;
+        background: #2563eb;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+      button.btn.secondary {
+        background: #374151;
+      }
+      button.btn:hover {
+        background: #1d4ed8;
+      }
+      .general-output {
+        font-size: 0.85rem;
+        line-height: 1.3;
+        background: #141414;
+        border-radius: 6px;
+        padding: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
       }
       .grid {
         display: grid;
@@ -61,13 +120,48 @@
       canvas {
         max-width: 100%;
       }
+      .metric-details {
+        font-size: 0.85rem;
+        line-height: 1.3;
+      }
+      .metric-details h4 {
+        margin: 8px 0 4px;
+        font-size: 0.95rem;
+      }
     </style>
   </head>
-  <body>
+  <body data-probe-interval="{{ probe_interval }}">
     <div class="page">
+      <div class="status-panel">
+        <div class="status-row">
+          <div class="status-title">Netprobe 2.0 – Status & Controls</div>
+          <div class="status-info">
+            <span id="lastProbe" class="badge">Last probe: …</span>
+            <span id="nextProbe" class="badge">Next probe in: …</span>
+          </div>
+        </div>
+        <div class="status-row">
+          <div class="status-buttons">
+            <button class="btn secondary" id="btnShowConfig">
+              Show Config / Env
+            </button>
+            <button class="btn" id="btnRunSpeedtest">
+              Run Speedtest Now
+            </button>
+          </div>
+          <div class="status-info" id="speedtestSummary">
+            Speedtest: not run yet
+          </div>
+        </div>
+        <div class="general-output" id="generalOutput">
+          Ready.
+        </div>
+      </div>
+
       <div class="grid">
+        <!-- LEFT COLUMN: current gauges -->
         <div class="panel">
-          <h3>Internet Quality (Current)</h3>
+          <h3>Current Internet Metrics</h3>
           <div class="gauges">
             <div class="gauge-row">
               <canvas id="gScore"></canvas>
@@ -92,210 +186,82 @@
           </div>
         </div>
 
+        <!-- RIGHT COLUMN: charts + explanations -->
         <div class="charts">
           <div class="panel">
-            <h3>Internet Quality Score (History)</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 style="margin-bottom:0;">Internet Quality Score (History)</h3>
+              <div style="font-size:0.8rem;">
+                History range:
+                <select id="rangeSelect" style="
+                    font-size:0.8rem;
+                    background:#222;
+                    color:#eee;
+                    border-radius:4px;
+                    border:1px solid #333;">
+                  <option value="60">~60 points</option>
+                  <option value="300" selected>~300 points</option>
+                  <option value="1440">~1440 points</option>
+                </select>
+              </div>
+            </div>
             <canvas id="cScoreHistory"></canvas>
           </div>
+
           <div class="panel">
             <h3>Packet Loss (History)</h3>
             <canvas id="cLossHistory"></canvas>
           </div>
+
           <div class="panel">
-            <h3>Latency (History)</h3>
+            <h3>Latency & Jitter (History)</h3>
             <canvas id="cLatencyHistory"></canvas>
-          </div>
-          <div class="panel">
-            <h3>Jitter (History)</h3>
             <canvas id="cJitterHistory"></canvas>
           </div>
+
           <div class="panel">
             <h3>DNS Response Time (History)</h3>
             <canvas id="cDnsHistory"></canvas>
+          </div>
+
+          <div class="panel">
+            <h3>Metric Descriptions</h3>
+            <div class="metric-details">
+              <h4>Internet Quality Score</h4>
+              <p>
+                Composite score from 0–100 based on packet loss, latency,
+                jitter, and DNS response time. Higher is better; values below
+                ~80 may indicate degraded experience.
+              </p>
+              <h4>Packet Loss</h4>
+              <p>
+                Percentage of ICMP packets that never reach their destination.
+                Healthy connections are usually near 0%. Spikes may indicate
+                congestion, cabling issues, or ISP problems.
+              </p>
+              <h4>Latency to Anchors</h4>
+              <p>
+                Round-trip time to your router / gateway and several public
+                sites. Persistent high latency affects games, VoIP, and other
+                real-time applications.
+              </p>
+              <h4>Jitter</h4>
+              <p>
+                How much latency varies between packets. High jitter is bad for
+                interactive traffic even when average latency looks fine.
+              </p>
+              <h4>DNS Response Time</h4>
+              <p>
+                Time for DNS servers to resolve the test domain. High values may
+                cause pages to feel "slow to start" even if raw bandwidth is
+                good.
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <script>
-      function makeGauge(ctx, label) {
-        return new Chart(ctx, {
-          type: "doughnut",
-          data: {
-            labels: [label, "Remaining"],
-            datasets: [
-              {
-                data: [0, 100],
-              },
-            ],
-          },
-          options: {
-            circumference: 180,
-            rotation: 270,
-            cutout: "70%",
-            plugins: {
-              legend: { display: false },
-              tooltip: { enabled: false },
-            },
-          },
-        });
-      }
-
-      const gScore = makeGauge(
-        document.getElementById("gScore").getContext("2d"),
-        "Score"
-      );
-      const gLoss = makeGauge(
-        document.getElementById("gLoss").getContext("2d"),
-        "Loss"
-      );
-      const gLatency = makeGauge(
-        document.getElementById("gLatency").getContext("2d"),
-        "Latency"
-      );
-      const gJitter = makeGauge(
-        document.getElementById("gJitter").getContext("2d"),
-        "Jitter"
-      );
-      const gDns = makeGauge(
-        document.getElementById("gDns").getContext("2d"),
-        "DNS"
-      );
-
-      function makeHistoryChart(ctx, label) {
-        return new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: [],
-            datasets: [
-              {
-                label,
-                data: [],
-                fill: false,
-                tension: 0.1,
-              },
-            ],
-          },
-          options: {
-            scales: {
-              x: {
-                ticks: { maxTicksLimit: 8 },
-              },
-              y: {
-                beginAtZero: true,
-              },
-            },
-          },
-        });
-      }
-
-      const cScoreHistory = makeHistoryChart(
-        document.getElementById("cScoreHistory").getContext("2d"),
-        "Score"
-      );
-      const cLossHistory = makeHistoryChart(
-        document.getElementById("cLossHistory").getContext("2d"),
-        "Loss %"
-      );
-      const cLatencyHistory = makeHistoryChart(
-        document.getElementById("cLatencyHistory").getContext("2d"),
-        "Latency ms"
-      );
-      const cJitterHistory = makeHistoryChart(
-        document.getElementById("cJitterHistory").getContext("2d"),
-        "Jitter ms"
-      );
-      const cDnsHistory = makeHistoryChart(
-        document.getElementById("cDnsHistory").getContext("2d"),
-        "DNS ms"
-      );
-
-      async function refresh() {
-        const res = await fetch("/api/score/recent?limit=300");
-        const json = await res.json();
-        const data = json.data || [];
-        if (!data.length) return;
-
-        const last = data[data.length - 1];
-
-        // Gauges
-        const score = last.score || 0;
-        const loss = last.avg_loss_pct || 0;
-        const latency = last.avg_latency_ms || 0;
-        const jitter = last.avg_jitter_ms || 0;
-        const dns = last.avg_dns_latency_ms || 0;
-
-        gScore.data.datasets[0].data = [score, 100 - score];
-        gScore.update();
-
-        // For non-percentage gauges, clamp at some visible scale (e.g., 0-200)
-        function clamp(val, max) {
-          return Math.min(val, max);
-        }
-
-        const lossGaugeVal = clamp(loss, 100);
-        gLoss.data.datasets[0].data = [100 - lossGaugeVal, lossGaugeVal];
-        gLoss.update();
-
-        const latencyGaugeVal = clamp(latency, 200);
-        gLatency.data.datasets[0].data = [200 - latencyGaugeVal, latencyGaugeVal];
-        gLatency.update();
-
-        const jitterGaugeVal = clamp(jitter, 100);
-        gJitter.data.datasets[0].data = [100 - jitterGaugeVal, jitterGaugeVal];
-        gJitter.update();
-
-        const dnsGaugeVal = clamp(dns, 200);
-        gDns.data.datasets[0].data = [200 - dnsGaugeVal, dnsGaugeVal];
-        gDns.update();
-
-        document.getElementById(
-          "gScoreText"
-        ).innerText = `Score: ${score.toFixed(1)}%`;
-        document.getElementById(
-          "gLossText"
-        ).innerText = `Loss: ${loss.toFixed(2)} %`;
-        document.getElementById(
-          "gLatencyText"
-        ).innerText = `Latency: ${latency.toFixed(1)} ms`;
-        document.getElementById(
-          "gJitterText"
-        ).innerText = `Jitter: ${jitter.toFixed(1)} ms`;
-        document.getElementById(
-          "gDnsText"
-        ).innerText = `DNS: ${dns.toFixed(1)} ms`;
-
-        // History charts
-        const labels = data.map((d) =>
-          new Date(d.ts * 1000).toLocaleTimeString()
-        );
-        cScoreHistory.data.labels = labels;
-        cScoreHistory.data.datasets[0].data = data.map((d) => d.score);
-        cScoreHistory.update();
-
-        cLossHistory.data.labels = labels;
-        cLossHistory.data.datasets[0].data = data.map((d) => d.avg_loss_pct);
-        cLossHistory.update();
-
-        cLatencyHistory.data.labels = labels;
-        cLatencyHistory.data.datasets[0].data = data.map(
-          (d) => d.avg_latency_ms
-        );
-        cLatencyHistory.update();
-
-        cJitterHistory.data.labels = labels;
-        cJitterHistory.data.datasets[0].data = data.map((d) => d.avg_jitter_ms);
-        cJitterHistory.update();
-
-        cDnsHistory.data.labels = labels;
-        cDnsHistory.data.datasets[0].data = data.map(
-          (d) => d.avg_dns_latency_ms
-        );
-        cDnsHistory.update();
-      }
-
-      refresh();
-      setInterval(refresh, 30000);
-    </script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
   </body>
 </html>
