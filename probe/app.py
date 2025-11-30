@@ -10,30 +10,32 @@ from flask import Flask, jsonify, render_template, request
 import dns.resolver
 import speedtest
 
-# ---------- config from env ----------
+# -------------------------
+# Config from environment
+# -------------------------
+
+WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
 
 DB_PATH = os.getenv("DB_PATH", "/data/netprobe.sqlite")
-WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
 
 PROBE_INTERVAL = int(os.getenv("PROBE_INTERVAL", "30"))
 PING_COUNT = int(os.getenv("PING_COUNT", "20"))
 
-EXTERNAL_PING_TARGETS = [
-    h.strip() for h in os.getenv("EXTERNAL_PING_TARGETS", "8.8.8.8,1.1.1.1,google.com").split(",")
-    if h.strip()
+SITES = [
+    s.strip() for s in os.getenv(
+        "SITES", "fast.com,google.com,youtube.com,amazon.com"
+    ).split(",") if s.strip()
 ]
 
-ROUTER_IP = os.getenv("ROUTER_IP", "").strip()  # optional manual internal target
+ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
 
-DNS_TEST_DOMAIN = os.getenv("DNS_TEST_DOMAIN", "google.com").strip()
-DNS_SERVERS = [
-    s.strip() for s in os.getenv("DNS_SERVERS", "1.1.1.1,8.8.8.8").split(",")
-    if s.strip()
-]
-DNS_QUERY_COUNT = int(os.getenv("DNS_QUERY_COUNT", "3"))
+DNS_TEST_SITE = os.getenv("DNS_TEST_SITE", "google.com").strip()
 
-SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "False").lower() == "true"
-SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "3600"))
+DNS_SERVERS = []
+for i in range(1, 5):
+    ip = os.getenv(f"DNS_NAMESERVER_{i}_IP", "").strip()
+    if ip:
+        DNS_SERVERS.append(ip)
 
 WEIGHT_LOSS = float(os.getenv("WEIGHT_LOSS", "0.6"))
 WEIGHT_LATENCY = float(os.getenv("WEIGHT_LATENCY", "0.15"))
@@ -45,7 +47,12 @@ THRESHOLD_LATENCY = float(os.getenv("THRESHOLD_LATENCY", "100"))
 THRESHOLD_JITTER = float(os.getenv("THRESHOLD_JITTER", "30"))
 THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 
-# ---------- DB helpers ----------
+SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "True").lower() == "true"
+SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
+
+# -------------------------
+# SQLite helpers
+# -------------------------
 
 def ensure_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -60,12 +67,13 @@ def ensure_db():
             avg_jitter_ms REAL,
             avg_loss_pct REAL,
             avg_dns_latency_ms REAL,
-            score REAL   -- 0-100
+            score REAL
         );
         """
     )
     conn.commit()
     conn.close()
+
 
 def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     conn = sqlite3.connect(DB_PATH)
@@ -73,14 +81,15 @@ def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     cur.execute(
         """
         INSERT INTO measurements
-            (ts, avg_latency_ms, avg_jitter_ms, avg_loss_pct,
-             avg_dns_latency_ms, score)
+        (ts, avg_latency_ms, avg_jitter_ms, avg_loss_pct,
+         avg_dns_latency_ms, score)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         (ts, avg_latency, avg_jitter, avg_loss, avg_dns, score),
     )
     conn.commit()
     conn.close()
+
 
 def fetch_recent(limit=2880):
     conn = sqlite3.connect(DB_PATH)
@@ -97,9 +106,9 @@ def fetch_recent(limit=2880):
     )
     rows = cur.fetchall()
     conn.close()
-    # reverse to chronological
-    rows.reverse()
+    rows.reverse()  # chronological
     return rows
+
 
 def fetch_latest():
     conn = sqlite3.connect(DB_PATH)
@@ -117,7 +126,9 @@ def fetch_latest():
     conn.close()
     return row
 
-# ---------- measurement helpers ----------
+# -------------------------
+# Measurement helpers
+# -------------------------
 
 def get_default_gateway():
     """Return default gateway IP inside the container, or None."""
@@ -130,10 +141,12 @@ def get_default_gateway():
     except Exception:
         return None
 
+
 def run_ping(host, count):
     """
-    Run ping and return dict: latency (avg ms), jitter (max-min),
-    loss (%). On hard failure, treat as 100% loss.
+    Run ping and return:
+      latency (avg ms), jitter (max-min), loss (%).
+    On failure, treat as 100% loss and huge latency/jitter.
     """
     try:
         proc = subprocess.run(
@@ -150,20 +163,24 @@ def run_ping(host, count):
         loss_line = next(l for l in lines if "packet loss" in l)
         rtt_line = next(l for l in lines if "min/avg/max" in l)
 
-        # e.g. "5 packets transmitted, 5 received, 0% packet loss, time 4004ms"
+        # "5 packets transmitted, 5 received, 0% packet loss, time 4004ms"
         loss_str = loss_line.split("%")[0].split()[-1]
         loss = float(loss_str)
 
-        # e.g. "rtt min/avg/max/mdev = 11.123/12.345/13.123/0.567 ms"
+        # "rtt min/avg/max/mdev = 11.123/12.345/13.123/0.567 ms"
         rtt_stats = rtt_line.split("=")[1].split()[0].split("/")
         rtt_min, rtt_avg, rtt_max, _ = map(float, rtt_stats)
         jitter = rtt_max - rtt_min
 
         return {"host": host, "latency": rtt_avg, "jitter": jitter, "loss": loss}
     except Exception:
-        # total failure => 100% loss, big latency/jitter
-        return {"host": host, "latency": THRESHOLD_LATENCY * 2,
-                "jitter": THRESHOLD_JITTER * 2, "loss": 100.0}
+        return {
+            "host": host,
+            "latency": THRESHOLD_LATENCY * 2,
+            "jitter": THRESHOLD_JITTER * 2,
+            "loss": 100.0,
+        }
+
 
 def measure_dns_latency(domain, server, count):
     resolver = dns.resolver.Resolver(configure=False)
@@ -176,20 +193,19 @@ def measure_dns_latency(domain, server, count):
             elapsed = (time.perf_counter() - start) * 1000.0
             times.append(elapsed)
         except Exception:
-            # treat timeout as "bad" but still count, so average increases
             elapsed = (time.perf_counter() - start) * 1000.0
             times.append(elapsed)
     if not times:
         return None
     return sum(times) / len(times)
 
+
 def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
     """
-    Recreate netprobe-style Internet Quality Score:
-    - clamp each metric at its threshold,
-    - normalize to [0,1],
-    - weight and subtract from 1,
-    - scale to 0-100.
+    Internet Quality Score:
+      - normalize each metric vs threshold,
+      - weight them,
+      - subtract from 1, scale to 0–100.
     """
     def eval_metric(value, threshold):
         if threshold <= 0:
@@ -208,17 +224,17 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
         + WEIGHT_JITTER * e_jit
         + WEIGHT_DNS_LATENCY * e_dns
     )
-    if raw < 0:
-        raw = 0
-    if raw > 1:
-        raw = 1
+    raw = max(0.0, min(1.0, raw))
     return raw * 100.0
 
-# ---------- probe loop ----------
+# -------------------------
+# Probe & speedtest loops
+# -------------------------
 
 last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
-latest_speedtest = None  # you can expand API to expose this
+latest_speedtest = None  # not exposed yet, but we can add API later
+
 
 def run_speedtest_if_due():
     global last_speedtest_ts, latest_speedtest
@@ -242,8 +258,8 @@ def run_speedtest_if_due():
             "server": res.get("server", {}),
         }
     except Exception:
-        # swallow; we don't want to kill probe loop
         pass
+
 
 def probe_loop():
     ensure_db()
@@ -253,12 +269,11 @@ def probe_loop():
         ts = int(time.time())
 
         ping_targets = []
-
         if gw:
             ping_targets.append(gw)
         if ROUTER_IP:
             ping_targets.append(ROUTER_IP)
-        ping_targets.extend(EXTERNAL_PING_TARGETS)
+        ping_targets.extend(SITES)
 
         ping_results = [run_ping(h, PING_COUNT) for h in ping_targets]
 
@@ -271,8 +286,8 @@ def probe_loop():
         avg_loss = statistics.mean(losses) if losses else 0
 
         dns_times = []
-        for s in DNS_SERVERS:
-            t = measure_dns_latency(DNS_TEST_DOMAIN, s, DNS_QUERY_COUNT)
+        for server in DNS_SERVERS:
+            t = measure_dns_latency(DNS_TEST_SITE, server, count=3)
             if t is not None:
                 dns_times.append(t)
         avg_dns = statistics.mean(dns_times) if dns_times else 0
@@ -280,19 +295,22 @@ def probe_loop():
         score = compute_score(avg_loss, avg_latency, avg_jitter, avg_dns)
         insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score)
 
-        # kick off speedtest if needed (async-ish)
         if SPEEDTEST_ENABLED:
             threading.Thread(target=run_speedtest_if_due, daemon=True).start()
 
         time.sleep(PROBE_INTERVAL)
 
-# ---------- web app ----------
+# -------------------------
+# Flask web app
+# -------------------------
 
 app = Flask(__name__)
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 @app.route("/api/score/recent")
 def api_recent():
@@ -315,6 +333,7 @@ def api_recent():
     ]
     return jsonify(data=data)
 
+
 @app.route("/api/score/latest")
 def api_latest():
     row = fetch_latest()
@@ -332,11 +351,13 @@ def api_latest():
     }
     return jsonify(data=data)
 
+
 def main():
     ensure_db()
     t = threading.Thread(target=probe_loop, daemon=True)
     t.start()
     app.run(host="0.0.0.0", port=WEB_PORT)
+
 
 if __name__ == "__main__":
     main()
