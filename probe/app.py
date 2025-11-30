@@ -240,7 +240,26 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
 
 last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
-latest_speedtest = None  # for future API
+latest_speedtest = None  # for API / UI display
+
+
+def run_speedtest_once():
+    """Run a single speedtest and return result dict (or None on failure)."""
+    try:
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        down = st.download()
+        up = st.upload()
+        res = st.results.dict()
+        return {
+            "ping_ms": res.get("ping"),
+            "download_mbps": down / (1024 * 1024),
+            "upload_mbps": up / (1024 * 1024),
+            "server": res.get("server", {}),
+            "timestamp": int(time.time()),
+        }
+    except Exception:
+        return None
 
 
 def run_speedtest_if_due():
@@ -252,21 +271,9 @@ def run_speedtest_if_due():
         if now - last_speedtest_ts < SPEEDTEST_INTERVAL:
             return
         last_speedtest_ts = now
-    try:
-        st = speedtest.Speedtest()
-        st.get_best_server()
-        down = st.download()
-        up = st.upload()
-        res = st.results.dict()
-        latest_speedtest = {
-            "ping_ms": res.get("ping"),
-            "download_mbps": down / (1024 * 1024),
-            "upload_mbps": up / (1024 * 1024),
-            "server": res.get("server", {}),
-        }
-    except Exception:
-        # swallow errors, we don't want to kill the probe loop
-        pass
+    result = run_speedtest_once()
+    if result is not None:
+        latest_speedtest = result
 
 
 def probe_loop():
@@ -373,9 +380,41 @@ def api_config():
         gateway_ip=get_default_gateway(),
         dns_test_site=DNS_TEST_SITE,
         dns_servers=DNS_SERVERS,
+        weight_loss=WEIGHT_LOSS,
+        weight_latency=WEIGHT_LATENCY,
+        weight_jitter=WEIGHT_JITTER,
+        weight_dns_latency=WEIGHT_DNS_LATENCY,
+        threshold_loss=THRESHOLD_LOSS,
+        threshold_latency=THRESHOLD_LATENCY,
+        threshold_jitter=THRESHOLD_JITTER,
+        threshold_dns_latency=THRESHOLD_DNS_LATENCY,
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
     )
+
+
+@app.route("/api/speedtest/run", methods=["POST"])
+def api_speedtest_run():
+    """Manual speedtest trigger for the 'Run Speedtest Now' button."""
+    global latest_speedtest, last_speedtest_ts
+
+    result = run_speedtest_once()
+    if result is None:
+        return jsonify(success=False, error="Speedtest failed"), 500
+
+    with last_speedtest_lock:
+        latest_speedtest = result
+        last_speedtest_ts = result["timestamp"]
+
+    return jsonify(success=True, result=result)
+
+
+@app.route("/api/speedtest/latest")
+def api_speedtest_latest():
+    """Optional endpoint to show last automatic/manual speedtest result."""
+    if latest_speedtest is None:
+        return jsonify(result=None)
+    return jsonify(result=latest_speedtest)
 
 
 def main():
