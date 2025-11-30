@@ -3,3 +3,4 @@ icmplib
 dnspython
 speedtest-cli
 python-dotenv
+Flask
