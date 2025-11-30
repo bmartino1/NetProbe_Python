@@ -4,7 +4,7 @@ import threading
 import sqlite3
 import subprocess
 import statistics
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Flask, jsonify, render_template, request
 import dns.resolver
@@ -22,9 +22,11 @@ PROBE_INTERVAL = int(os.getenv("PROBE_INTERVAL", "30"))
 PING_COUNT = int(os.getenv("PING_COUNT", "20"))
 
 SITES = [
-    s.strip() for s in os.getenv(
+    s.strip()
+    for s in os.getenv(
         "SITES", "fast.com,google.com,youtube.com,amazon.com"
-    ).split(",") if s.strip()
+    ).split(",")
+    if s.strip()
 ]
 
 ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
@@ -53,6 +55,7 @@ SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 # -------------------------
 # SQLite helpers
 # -------------------------
+
 
 def ensure_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -126,9 +129,11 @@ def fetch_latest():
     conn.close()
     return row
 
+
 # -------------------------
 # Measurement helpers
 # -------------------------
+
 
 def get_default_gateway():
     """Return default gateway IP inside the container, or None."""
@@ -207,6 +212,7 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
       - weight them,
       - subtract from 1, scale to 0–100.
     """
+
     def eval_metric(value, threshold):
         if threshold <= 0:
             return 0.0
@@ -227,13 +233,14 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
     raw = max(0.0, min(1.0, raw))
     return raw * 100.0
 
+
 # -------------------------
 # Probe & speedtest loops
 # -------------------------
 
 last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
-latest_speedtest = None  # not exposed yet, but we can add API later
+latest_speedtest = None  # for future API
 
 
 def run_speedtest_if_due():
@@ -300,6 +307,7 @@ def probe_loop():
 
         time.sleep(PROBE_INTERVAL)
 
+
 # -------------------------
 # Flask web app
 # -------------------------
@@ -322,7 +330,7 @@ def api_recent():
     data = [
         {
             "ts": r[0],
-            "iso": datetime.utcfromtimestamp(r[0]).isoformat() + "Z",
+            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
             "avg_latency_ms": r[1],
             "avg_jitter_ms": r[2],
             "avg_loss_pct": r[3],
@@ -342,7 +350,7 @@ def api_latest():
     r = row
     data = {
         "ts": r[0],
-        "iso": datetime.utcfromtimestamp(r[0]).isoformat() + "Z",
+            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
         "avg_latency_ms": r[1],
         "avg_jitter_ms": r[2],
         "avg_loss_pct": r[3],
