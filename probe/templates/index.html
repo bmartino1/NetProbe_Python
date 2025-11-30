@@ -5,115 +5,294 @@
     <title>Netprobe 2.0 – Internet Quality</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+      :root {
+        color-scheme: dark;
+      }
       body {
         background: #111;
         color: #eee;
-        font-family: system-ui, sans-serif;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        margin: 0;
       }
-      .container {
-        display: flex;
-        flex-direction: row;
-        gap: 20px;
-        padding: 20px;
+      .page {
+        padding: 16px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 16px;
       }
       .panel {
         background: #181818;
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 16px;
-        flex: 1;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
       }
-      canvas { max-width: 100%; }
-      .metric-line { margin-top: 8px; font-size: 0.9rem; }
+      .panel h3 {
+        margin-top: 0;
+        font-size: 1rem;
+        margin-bottom: 8px;
+      }
+      .gauges {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .gauge-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .gauge-row canvas {
+        max-width: 140px;
+      }
+      .gauge-text {
+        font-size: 0.9rem;
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      canvas {
+        max-width: 100%;
+      }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="panel" style="max-width: 320px;">
-        <h3>Internet Quality Score (Avg)</h3>
-        <canvas id="gauge"></canvas>
-        <div id="latest-metrics"></div>
-      </div>
-      <div class="panel">
-        <h3>Internet Quality Score (History)</h3>
-        <canvas id="history"></canvas>
+    <div class="page">
+      <div class="grid">
+        <div class="panel">
+          <h3>Internet Quality (Current)</h3>
+          <div class="gauges">
+            <div class="gauge-row">
+              <canvas id="gScore"></canvas>
+              <div class="gauge-text" id="gScoreText"></div>
+            </div>
+            <div class="gauge-row">
+              <canvas id="gLoss"></canvas>
+              <div class="gauge-text" id="gLossText"></div>
+            </div>
+            <div class="gauge-row">
+              <canvas id="gLatency"></canvas>
+              <div class="gauge-text" id="gLatencyText"></div>
+            </div>
+            <div class="gauge-row">
+              <canvas id="gJitter"></canvas>
+              <div class="gauge-text" id="gJitterText"></div>
+            </div>
+            <div class="gauge-row">
+              <canvas id="gDns"></canvas>
+              <div class="gauge-text" id="gDnsText"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts">
+          <div class="panel">
+            <h3>Internet Quality Score (History)</h3>
+            <canvas id="cScoreHistory"></canvas>
+          </div>
+          <div class="panel">
+            <h3>Packet Loss (History)</h3>
+            <canvas id="cLossHistory"></canvas>
+          </div>
+          <div class="panel">
+            <h3>Latency (History)</h3>
+            <canvas id="cLatencyHistory"></canvas>
+          </div>
+          <div class="panel">
+            <h3>Jitter (History)</h3>
+            <canvas id="cJitterHistory"></canvas>
+          </div>
+          <div class="panel">
+            <h3>DNS Response Time (History)</h3>
+            <canvas id="cDnsHistory"></canvas>
+          </div>
+        </div>
       </div>
     </div>
 
     <script>
-      const gaugeCtx = document.getElementById('gauge').getContext('2d');
-      const historyCtx = document.getElementById('history').getContext('2d');
-
-      const gaugeChart = new Chart(gaugeCtx, {
-        type: 'doughnut',
-        data: {
-          labels: ['Quality', 'Remaining'],
-          datasets: [{
-            data: [0, 100],
-          }]
-        },
-        options: {
-          circumference: 180,
-          rotation: 270,
-          cutout: '70%',
-          plugins: {
-            legend: { display: false },
-            tooltip: { enabled: false }
-          }
-        }
-      });
-
-      const historyChart = new Chart(historyCtx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            label: 'Internet Quality Score',
-            data: [],
-            fill: false,
-            tension: 0.1,
-          }]
-        },
-        options: {
-          scales: {
-            y: { min: 0, max: 100 }
-          }
-        }
-      });
-
-      async function refreshLatest() {
-        const res = await fetch('/api/score/latest');
-        const json = await res.json();
-        if (!json.data) return;
-        const d = json.data;
-        const score = d.score || 0;
-        gaugeChart.data.datasets[0].data = [score, 100 - score];
-        gaugeChart.update();
-
-        document.getElementById('latest-metrics').innerHTML = `
-          <div class="metric-line">Score: ${score.toFixed(1)}%</div>
-          <div class="metric-line">Latency: ${d.avg_latency_ms.toFixed(1)} ms</div>
-          <div class="metric-line">Jitter: ${d.avg_jitter_ms.toFixed(1)} ms</div>
-          <div class="metric-line">Loss: ${d.avg_loss_pct.toFixed(2)} %</div>
-          <div class="metric-line">DNS: ${d.avg_dns_latency_ms.toFixed(1)} ms</div>
-        `;
+      function makeGauge(ctx, label) {
+        return new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: [label, "Remaining"],
+            datasets: [
+              {
+                data: [0, 100],
+              },
+            ],
+          },
+          options: {
+            circumference: 180,
+            rotation: 270,
+            cutout: "70%",
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: false },
+            },
+          },
+        });
       }
 
-      async function refreshHistory() {
-        const res = await fetch('/api/score/recent?limit=300');
+      const gScore = makeGauge(
+        document.getElementById("gScore").getContext("2d"),
+        "Score"
+      );
+      const gLoss = makeGauge(
+        document.getElementById("gLoss").getContext("2d"),
+        "Loss"
+      );
+      const gLatency = makeGauge(
+        document.getElementById("gLatency").getContext("2d"),
+        "Latency"
+      );
+      const gJitter = makeGauge(
+        document.getElementById("gJitter").getContext("2d"),
+        "Jitter"
+      );
+      const gDns = makeGauge(
+        document.getElementById("gDns").getContext("2d"),
+        "DNS"
+      );
+
+      function makeHistoryChart(ctx, label) {
+        return new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label,
+                data: [],
+                fill: false,
+                tension: 0.1,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              x: {
+                ticks: { maxTicksLimit: 8 },
+              },
+              y: {
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      }
+
+      const cScoreHistory = makeHistoryChart(
+        document.getElementById("cScoreHistory").getContext("2d"),
+        "Score"
+      );
+      const cLossHistory = makeHistoryChart(
+        document.getElementById("cLossHistory").getContext("2d"),
+        "Loss %"
+      );
+      const cLatencyHistory = makeHistoryChart(
+        document.getElementById("cLatencyHistory").getContext("2d"),
+        "Latency ms"
+      );
+      const cJitterHistory = makeHistoryChart(
+        document.getElementById("cJitterHistory").getContext("2d"),
+        "Jitter ms"
+      );
+      const cDnsHistory = makeHistoryChart(
+        document.getElementById("cDnsHistory").getContext("2d"),
+        "DNS ms"
+      );
+
+      async function refresh() {
+        const res = await fetch("/api/score/recent?limit=300");
         const json = await res.json();
         const data = json.data || [];
-        historyChart.data.labels = data.map(d => new Date(d.ts * 1000).toLocaleString());
-        historyChart.data.datasets[0].data = data.map(d => d.score);
-        historyChart.update();
+        if (!data.length) return;
+
+        const last = data[data.length - 1];
+
+        // Gauges
+        const score = last.score || 0;
+        const loss = last.avg_loss_pct || 0;
+        const latency = last.avg_latency_ms || 0;
+        const jitter = last.avg_jitter_ms || 0;
+        const dns = last.avg_dns_latency_ms || 0;
+
+        gScore.data.datasets[0].data = [score, 100 - score];
+        gScore.update();
+
+        // For non-percentage gauges, clamp at some visible scale (e.g., 0-200)
+        function clamp(val, max) {
+          return Math.min(val, max);
+        }
+
+        const lossGaugeVal = clamp(loss, 100);
+        gLoss.data.datasets[0].data = [100 - lossGaugeVal, lossGaugeVal];
+        gLoss.update();
+
+        const latencyGaugeVal = clamp(latency, 200);
+        gLatency.data.datasets[0].data = [200 - latencyGaugeVal, latencyGaugeVal];
+        gLatency.update();
+
+        const jitterGaugeVal = clamp(jitter, 100);
+        gJitter.data.datasets[0].data = [100 - jitterGaugeVal, jitterGaugeVal];
+        gJitter.update();
+
+        const dnsGaugeVal = clamp(dns, 200);
+        gDns.data.datasets[0].data = [200 - dnsGaugeVal, dnsGaugeVal];
+        gDns.update();
+
+        document.getElementById(
+          "gScoreText"
+        ).innerText = `Score: ${score.toFixed(1)}%`;
+        document.getElementById(
+          "gLossText"
+        ).innerText = `Loss: ${loss.toFixed(2)} %`;
+        document.getElementById(
+          "gLatencyText"
+        ).innerText = `Latency: ${latency.toFixed(1)} ms`;
+        document.getElementById(
+          "gJitterText"
+        ).innerText = `Jitter: ${jitter.toFixed(1)} ms`;
+        document.getElementById(
+          "gDnsText"
+        ).innerText = `DNS: ${dns.toFixed(1)} ms`;
+
+        // History charts
+        const labels = data.map((d) =>
+          new Date(d.ts * 1000).toLocaleTimeString()
+        );
+        cScoreHistory.data.labels = labels;
+        cScoreHistory.data.datasets[0].data = data.map((d) => d.score);
+        cScoreHistory.update();
+
+        cLossHistory.data.labels = labels;
+        cLossHistory.data.datasets[0].data = data.map((d) => d.avg_loss_pct);
+        cLossHistory.update();
+
+        cLatencyHistory.data.labels = labels;
+        cLatencyHistory.data.datasets[0].data = data.map(
+          (d) => d.avg_latency_ms
+        );
+        cLatencyHistory.update();
+
+        cJitterHistory.data.labels = labels;
+        cJitterHistory.data.datasets[0].data = data.map((d) => d.avg_jitter_ms);
+        cJitterHistory.update();
+
+        cDnsHistory.data.labels = labels;
+        cDnsHistory.data.datasets[0].data = data.map(
+          (d) => d.avg_dns_latency_ms
+        );
+        cDnsHistory.update();
       }
 
-      async function tick() {
-        await refreshLatest();
-        await refreshHistory();
-      }
-
-      tick();
-      setInterval(tick, 30000); // every 30s
+      refresh();
+      setInterval(refresh, 30000);
     </script>
   </body>
 </html>
