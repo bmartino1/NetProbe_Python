@@ -1,61 +1,56 @@
-version: "3.8"
+#version: "3.8"
 
 services:
-  db:
-    image: postgres:16
-    container_name: np2-db
-    restart: always
-    environment:
-      POSTGRES_DB: netprobe
-      POSTGRES_USER: netprobe
-      POSTGRES_PASSWORD: netprobe_password_change_me
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    networks:
-      - netprobe2
-
-  grafana:
-    image: grafana/grafana-enterprise:latest
-    container_name: np2-grafana
-    restart: always
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: change_me
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - db
-    networks:
-      - netprobe2
-
-  probe:
+  netprobe:
     build: ./probe
-    container_name: np2-probe
-    restart: always
+    # image: bmmbmm01/netprobe:latest   # use this instead of build when pushing to Docker Hub
+    container_name: netprobe
+    restart: unless-stopped
+
     env_file:
       - ./probe/config.env
-    depends_on:
-      - db
-    networks:
-      - netprobe2
 
-  valkey:
-    image: valkey/valkey:latest
-    container_name: np2-valkey
-    restart: always
+    environment:
+      # Web UI port (inside container)
+      WEB_PORT: ${WEB_PORT:-8080}
+
+      # Site target list (limit ~5 sites / domains)
+      SITES: ${SITES:-fast.com,google.com,youtube.com,amazon.com}
+
+      # DNS test site
+      DNS_TEST_SITE: ${DNS_TEST_SITE:-google.com}
+
+      # DNS name servers (4 slots, last typically your home DNS)
+      DNS_NAMESERVER_1: ${DNS_NAMESERVER_1:-Google_DNS}
+      DNS_NAMESERVER_1_IP: ${DNS_NAMESERVER_1_IP:-8.8.8.8}
+      DNS_NAMESERVER_2: ${DNS_NAMESERVER_2:-Quad9_DNS}
+      DNS_NAMESERVER_2_IP: ${DNS_NAMESERVER_2_IP:-9.9.9.9}
+      DNS_NAMESERVER_3: ${DNS_NAMESERVER_3:-CloudFlare_DNS}
+      DNS_NAMESERVER_3_IP: ${DNS_NAMESERVER_3_IP:-1.1.1.1}
+      DNS_NAMESERVER_4: ${DNS_NAMESERVER_4:-My_DNS_Server}
+      DNS_NAMESERVER_4_IP: ${DNS_NAMESERVER_4_IP:-192.168.1.1}
+
+      # Health Score Weights (should sum to 1.0)
+      WEIGHT_LOSS: ${WEIGHT_LOSS:-0.6}
+      WEIGHT_LATENCY: ${WEIGHT_LATENCY:-0.15}
+      WEIGHT_JITTER: ${WEIGHT_JITTER:-0.2}
+      WEIGHT_DNS_LATENCY: ${WEIGHT_DNS_LATENCY:-0.05}
+
+      # Health Score Thresholds
+      THRESHOLD_LOSS: ${THRESHOLD_LOSS:-5}
+      THRESHOLD_LATENCY: ${THRESHOLD_LATENCY:-100}
+      THRESHOLD_JITTER: ${THRESHOLD_JITTER:-30}
+      THRESHOLD_DNS_LATENCY: ${THRESHOLD_DNS_LATENCY:-100}
+
+      # Speedtest configuration
+      SPEEDTEST_ENABLED: ${SPEEDTEST_ENABLED:-True}
+      SPEEDTEST_INTERVAL: ${SPEEDTEST_INTERVAL:-14400}
+
     ports:
-      - "6379:6379"
-    networks:
-      - netprobe2
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
 
-
-networks:
-  netprobe2:
-    driver: bridge
+    volumes:
+      - netprobe_data:/data
 
 volumes:
-  db_data:
-  grafana_data:
+  netprobe_data:
