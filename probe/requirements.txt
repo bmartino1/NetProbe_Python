@@ -1,6 +1,3 @@
-psycopg2-binary
-icmplib
+Flask
 dnspython
 speedtest-cli
-python-dotenv
-Flask
