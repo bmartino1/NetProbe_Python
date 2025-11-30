@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App code (Flask app, probe logic, templates, etc.)
 COPY app.py ./app.py
-COPY config.example.env ./config.example.env
 COPY templates ./templates
 COPY static ./static
 
