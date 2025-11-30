@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Netprobe 2.0 – Internet Quality</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        background: #111;
+        color: #eee;
+        font-family: system-ui, sans-serif;
+      }
+      .container {
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+        padding: 20px;
+      }
+      .panel {
+        background: #181818;
+        border-radius: 8px;
+        padding: 16px;
+        flex: 1;
+      }
+      canvas { max-width: 100%; }
+      .metric-line { margin-top: 8px; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="panel" style="max-width: 320px;">
+        <h3>Internet Quality Score (Avg)</h3>
+        <canvas id="gauge"></canvas>
+        <div id="latest-metrics"></div>
+      </div>
+      <div class="panel">
+        <h3>Internet Quality Score (History)</h3>
+        <canvas id="history"></canvas>
+      </div>
+    </div>
+
+    <script>
+      const gaugeCtx = document.getElementById('gauge').getContext('2d');
+      const historyCtx = document.getElementById('history').getContext('2d');
+
+      const gaugeChart = new Chart(gaugeCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Quality', 'Remaining'],
+          datasets: [{
+            data: [0, 100],
+          }]
+        },
+        options: {
+          circumference: 180,
+          rotation: 270,
+          cutout: '70%',
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false }
+          }
+        }
+      });
+
+      const historyChart = new Chart(historyCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Internet Quality Score',
+            data: [],
+            fill: false,
+            tension: 0.1,
+          }]
+        },
+        options: {
+          scales: {
+            y: { min: 0, max: 100 }
+          }
+        }
+      });
+
+      async function refreshLatest() {
+        const res = await fetch('/api/score/latest');
+        const json = await res.json();
+        if (!json.data) return;
+        const d = json.data;
+        const score = d.score || 0;
+        gaugeChart.data.datasets[0].data = [score, 100 - score];
+        gaugeChart.update();
+
+        document.getElementById('latest-metrics').innerHTML = `
+          <div class="metric-line">Score: ${score.toFixed(1)}%</div>
+          <div class="metric-line">Latency: ${d.avg_latency_ms.toFixed(1)} ms</div>
+          <div class="metric-line">Jitter: ${d.avg_jitter_ms.toFixed(1)} ms</div>
+          <div class="metric-line">Loss: ${d.avg_loss_pct.toFixed(2)} %</div>
+          <div class="metric-line">DNS: ${d.avg_dns_latency_ms.toFixed(1)} ms</div>
+        `;
+      }
+
+      async function refreshHistory() {
+        const res = await fetch('/api/score/recent?limit=300');
+        const json = await res.json();
+        const data = json.data || [];
+        historyChart.data.labels = data.map(d => new Date(d.ts * 1000).toLocaleString());
+        historyChart.data.datasets[0].data = data.map(d => d.score);
+        historyChart.update();
+      }
+
+      async function tick() {
+        await refreshLatest();
+        await refreshHistory();
+      }
+
+      tick();
+      setInterval(tick, 30000); // every 30s
+    </script>
+  </body>
+</html>
