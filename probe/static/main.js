@@ -6,10 +6,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const rangeSelect = document.getElementById("rangeSelect");
   const nextProbeEl = document.getElementById("nextProbe");
-  const configList = document.getElementById("configList");
+  const lastProbeEl = document.getElementById("lastProbe");
+  const generalOutput = document.getElementById("generalOutput");
+  const speedtestSummary = document.getElementById("speedtestSummary");
+
+  const btnShowConfig = document.getElementById("btnShowConfig");
+  const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
 
   let lastTimestamp = null;
-  let currentLimit = parseInt(rangeSelect.value, 10);
+  let currentLimit = parseInt(rangeSelect.value, 10) || 300;
+
+  // ----------------- Charts & Gauges -----------------
 
   function makeGauge(ctx, label) {
     return new Chart(ctx, {
@@ -107,11 +114,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return Math.min(val, max);
   }
 
+  // ----------------- Data refresh -----------------
+
   async function refreshData() {
     const res = await fetch(`/api/score/recent?limit=${currentLimit}`);
     const json = await res.json();
     const data = json.data || [];
-    if (!data.length) return;
+    if (!data.length) {
+      generalOutput.textContent =
+        "No probe data yet. Waiting for first measurement…";
+      return;
+    }
 
     const last = data[data.length - 1];
     lastTimestamp = last.ts;
@@ -121,6 +134,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const latency = last.avg_latency_ms || 0;
     const jitter = last.avg_jitter_ms || 0;
     const dns = last.avg_dns_latency_ms || 0;
+
+    // Last/next probe text
+    const lastDate = new Date(last.ts * 1000);
+    lastProbeEl.textContent = `Last probe: ${lastDate.toLocaleString()}`;
 
     // Score gauge
     gScore.data.datasets[0].data = [score, 100 - score];
@@ -193,64 +210,145 @@ document.addEventListener("DOMContentLoaded", () => {
     cDnsHistory.update();
   }
 
-  async function loadConfig() {
+  // ----------------- Config / Env display -----------------
+
+  async function showConfig() {
+    generalOutput.textContent = "Loading config / env…";
     const res = await fetch("/api/config");
     const cfg = await res.json();
-    const parts = [];
 
-    if (cfg.sites && cfg.sites.length) {
-      parts.push(
-        `<li><strong>Sites:</strong> ${cfg.sites.join(", ")}</li>`
-      );
-    }
-    if (cfg.router_ip) {
-      parts.push(`<li><strong>Router IP:</strong> ${cfg.router_ip}</li>`);
-    }
-    if (cfg.dns_test_site) {
-      parts.push(
-        `<li><strong>DNS test domain:</strong> ${cfg.dns_test_site}</li>`
-      );
-    }
-    if (cfg.dns_servers && cfg.dns_servers.length) {
-      parts.push(
-        `<li><strong>DNS servers:</strong> ${cfg.dns_servers.join(", ")}</li>`
-      );
-    }
-    parts.push(
-      `<li><strong>Probe interval:</strong> ${cfg.probe_interval}s</li>`
-    );
+    const lines = [];
 
-    configList.innerHTML = parts.join("");
+    lines.push("== Probe Settings ==");
+    lines.push(`Probe interval: ${cfg.probe_interval}s`);
+    lines.push(`Ping count per target: ${cfg.ping_count}`);
+    lines.push("");
+
+    lines.push("== Ping Targets ==");
+    if (cfg.gateway_ip) lines.push(`Gateway: ${cfg.gateway_ip}`);
+    if (cfg.router_ip) lines.push(`Router: ${cfg.router_ip}`);
+    if (cfg.sites && cfg.sites.length)
+      lines.push(`Sites: ${cfg.sites.join(", ")}`);
+    lines.push("");
+
+    lines.push("== DNS ==");
+    lines.push(`Test domain: ${cfg.dns_test_site}`);
+    if (cfg.dns_servers && cfg.dns_servers.length)
+      lines.push(`Servers: ${cfg.dns_servers.join(", ")}`);
+    lines.push("");
+
+    lines.push("== Score Weights ==");
+    lines.push(`Loss: ${cfg.weight_loss}`);
+    lines.push(`Latency: ${cfg.weight_latency}`);
+    lines.push(`Jitter: ${cfg.weight_jitter}`);
+    lines.push(`DNS Latency: ${cfg.weight_dns_latency}`);
+    lines.push("");
+
+    lines.push("== Score Thresholds ==");
+    lines.push(`Loss: ${cfg.threshold_loss}%`);
+    lines.push(`Latency: ${cfg.threshold_latency} ms`);
+    lines.push(`Jitter: ${cfg.threshold_jitter} ms`);
+    lines.push(`DNS Latency: ${cfg.threshold_dns_latency} ms`);
+    lines.push("");
+
+    lines.push("== Speedtest ==");
+    lines.push(`Enabled: ${cfg.speedtest_enabled}`);
+    lines.push(`Interval: ${cfg.speedtest_interval}s`);
+
+    generalOutput.textContent = lines.join("\n");
   }
+
+  // ----------------- Speedtest Now -----------------
+
+  async function runSpeedtestNow() {
+    generalOutput.textContent = "Running speedtest… this can take a bit…";
+    speedtestSummary.textContent = "Speedtest: running…";
+
+    try {
+      const res = await fetch("/api/speedtest/run", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        generalOutput.textContent =
+          "Speedtest failed: " + (errText || res.status);
+        speedtestSummary.textContent = "Speedtest: failed";
+        return;
+      }
+      const json = await res.json();
+      if (!json.success) {
+        generalOutput.textContent =
+          "Speedtest failed: " + (json.error || "unknown error");
+        speedtestSummary.textContent = "Speedtest: failed";
+        return;
+      }
+      const r = json.result;
+      const ts = new Date(r.timestamp * 1000).toLocaleString();
+      const textLines = [
+        "== Manual Speedtest Result ==",
+        `Time: ${ts}`,
+        `Ping: ${r.ping_ms?.toFixed(1)} ms`,
+        `Download: ${r.download_mbps?.toFixed(2)} Mbps`,
+        `Upload: ${r.upload_mbps?.toFixed(2)} Mbps`,
+      ];
+      if (r.server) {
+        const s = r.server;
+        const srvStr = `${s.name || ""} (${s.host || ""}) [${s.country || ""}]`;
+        textLines.push(`Server: ${srvStr}`);
+      }
+      generalOutput.textContent = textLines.join("\n");
+      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
+        1
+      )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
+        1
+      )} ms)`;
+    } catch (e) {
+      generalOutput.textContent = "Speedtest error: " + e;
+      speedtestSummary.textContent = "Speedtest: error";
+    }
+  }
+
+  // ----------------- Countdown -----------------
 
   function updateCountdown() {
     if (!lastTimestamp) {
-      nextProbeEl.textContent = "Next probe: waiting for first sample…";
+      nextProbeEl.textContent = "Next probe in: waiting for first sample…";
       return;
     }
     const nowSec = Math.floor(Date.now() / 1000);
-    let remaining = lastTimestamp + probeInterval - nowSec;
+    const nextTs = lastTimestamp + probeInterval;
+    let remaining = nextTs - nowSec;
     if (remaining < 0) remaining = 0;
-    nextProbeEl.textContent = `Next probe: ${remaining}s`;
+    nextProbeEl.textContent = `Next probe in: ${remaining}s`;
   }
 
-  // Range selector
+  // ----------------- Event wiring -----------------
+
   rangeSelect.addEventListener("change", () => {
     currentLimit = parseInt(rangeSelect.value, 10) || 300;
     refreshData();
   });
 
-  // Speedtest buttons
-  document.getElementById("btnFast").addEventListener("click", () => {
-    window.open("https://fast.com", "_blank");
-  });
-  document.getElementById("btnOokla").addEventListener("click", () => {
-    window.open("https://www.speedtest.net", "_blank");
-  });
+  btnShowConfig.addEventListener("click", showConfig);
+  btnRunSpeedtest.addEventListener("click", runSpeedtestNow);
 
   // Initial loads
-  loadConfig();
   refreshData();
+  showConfig(); // populate general area once at load
+  // Attempt to show latest speedtest if any
+  fetch("/api/speedtest/latest")
+    .then((r) => r.json())
+    .then((j) => {
+      if (j && j.result) {
+        const r = j.result;
+        speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
+          1
+        )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
+          1
+        )} ms)`;
+      }
+    })
+    .catch(() => {});
 
   // Periodic refresh & countdown
   setInterval(refreshData, Math.max(10, probeInterval)); // refresh at least every 10s
