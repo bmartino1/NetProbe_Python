@@ -265,6 +265,7 @@ def run_speedtest_if_due():
             "server": res.get("server", {}),
         }
     except Exception:
+        # swallow errors, we don't want to kill the probe loop
         pass
 
 
@@ -317,7 +318,8 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # Pass probe interval into the HTML so JS can drive the countdown timer
+    return render_template("index.html", probe_interval=PROBE_INTERVAL)
 
 
 @app.route("/api/score/recent")
@@ -350,7 +352,7 @@ def api_latest():
     r = row
     data = {
         "ts": r[0],
-            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+        "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
         "avg_latency_ms": r[1],
         "avg_jitter_ms": r[2],
         "avg_loss_pct": r[3],
@@ -358,6 +360,22 @@ def api_latest():
         "score": r[5],
     }
     return jsonify(data=data)
+
+
+@app.route("/api/config")
+def api_config():
+    # Lightweight config for UI display
+    return jsonify(
+        probe_interval=PROBE_INTERVAL,
+        ping_count=PING_COUNT,
+        sites=SITES,
+        router_ip=ROUTER_IP or None,
+        gateway_ip=get_default_gateway(),
+        dns_test_site=DNS_TEST_SITE,
+        dns_servers=DNS_SERVERS,
+        speedtest_enabled=SPEEDTEST_ENABLED,
+        speedtest_interval=SPEEDTEST_INTERVAL,
+    )
 
 
 def main():
