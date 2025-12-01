@@ -5,10 +5,21 @@ import sqlite3
 import subprocess
 import statistics
 from datetime import datetime, timezone
+import logging
 
 from flask import Flask, jsonify, render_template, request
 import dns.resolver
 import speedtest
+
+# -------------------------
+# Logging setup
+# -------------------------
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("netprobe")
 
 # -------------------------
 # Config from environment
@@ -51,6 +62,10 @@ THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 
 SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "True").lower() == "true"
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
+
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")  # informational
+
+logger.info("Netprobe 2.0 starting with PROBE_INTERVAL=%ss, PING_COUNT=%s", PROBE_INTERVAL, PING_COUNT)
 
 # -------------------------
 # SQLite helpers
@@ -187,7 +202,8 @@ def get_default_gateway():
             text=True,
         ).strip()
         return out or None
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to get default gateway: %s", e)
         return None
 
 
@@ -221,8 +237,22 @@ def run_ping(host, count):
         rtt_min, rtt_avg, rtt_max, _ = map(float, rtt_stats)
         jitter = rtt_max - rtt_min
 
+        logger.debug(
+            "ping %s -> loss=%.2f%% avg=%.2fms jitter=%.2fms",
+            host,
+            loss,
+            rtt_avg,
+            jitter,
+        )
         return {"host": host, "latency": rtt_avg, "jitter": jitter, "loss": loss}
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "ping to %s failed (%s); falling back to synthetic values (loss=100%%, latency=%sms, jitter=%sms)",
+            host,
+            e,
+            THRESHOLD_LATENCY * 2,
+            THRESHOLD_JITTER * 2,
+        )
         return {
             "host": host,
             "latency": THRESHOLD_LATENCY * 2,
@@ -300,6 +330,13 @@ def run_speedtest_once():
         download_mbps = down / (1024 * 1024)
         upload_mbps = up / (1024 * 1024)
         insert_speedtest(ts, ping_ms, download_mbps, upload_mbps)
+        logger.info(
+            "speedtest ts=%s ping=%.1fms down=%.2fMbps up=%.2fMbps",
+            ts,
+            ping_ms,
+            download_mbps,
+            upload_mbps,
+        )
         return {
             "timestamp": ts,
             "ping_ms": ping_ms,
@@ -307,7 +344,8 @@ def run_speedtest_once():
             "upload_mbps": upload_mbps,
             "server": res.get("server", {}),
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("speedtest failed: %s", e)
         return None
 
 
@@ -330,6 +368,10 @@ def run_speedtest_if_due():
 def probe_loop():
     ensure_db()
     gw = get_default_gateway()
+    if gw:
+        logger.info("Detected default gateway inside container: %s", gw)
+    else:
+        logger.info("No default gateway detected inside container.")
 
     while True:
         ts = int(time.time())
@@ -361,6 +403,16 @@ def probe_loop():
         score = compute_score(avg_loss, avg_latency, avg_jitter, avg_dns)
         insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score)
 
+        logger.info(
+            "probe ts=%s loss=%.2f%% latency=%.1fms jitter=%.1fms dns=%.1fms score=%.1f",
+            ts,
+            avg_loss,
+            avg_latency,
+            avg_jitter,
+            avg_dns,
+            score,
+        )
+
         if SPEEDTEST_ENABLED:
             threading.Thread(target=run_speedtest_if_due, daemon=True).start()
 
@@ -377,7 +429,9 @@ app = Flask(__name__)
 @app.route("/")
 def index():
     # Pass probe interval into the HTML so JS can drive the countdown timer
-    return render_template("index.html", probe_interval=PROBE_INTERVAL)
+    return render_template(
+        "index.html", probe_interval=PROBE_INTERVAL, app_timezone=APP_TIMEZONE
+    )
 
 
 @app.route("/api/score/recent")
@@ -441,6 +495,7 @@ def api_config():
         threshold_dns_latency=THRESHOLD_DNS_LATENCY,
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
+        app_timezone=APP_TIMEZONE,
     )
 
 
@@ -506,6 +561,7 @@ def main():
     ensure_db()
     t = threading.Thread(target=probe_loop, daemon=True)
     t.start()
+    # If you stay on Flask dev server:
     app.run(host="0.0.0.0", port=WEB_PORT)
 
 
