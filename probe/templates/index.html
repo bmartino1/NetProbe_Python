@@ -145,6 +145,7 @@
           <div class="status-info">
             <span id="lastProbe" class="badge">Last probe: …</span>
             <span id="nextProbe" class="badge">Next probe in: …</span>
+            <span class="badge">TZ: {{ app_timezone }}</span>
           </div>
         </div>
         <div class="status-row">
@@ -182,9 +183,15 @@
                 data-range-for="score"
                 id="rangeScore"
               >
-                <option value="30s">30 seconds</option>
+                <option value="5s">5 seconds</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
@@ -221,9 +228,15 @@
                 data-range-for="loss"
                 id="rangeLoss"
               >
-                <option value="30s">30 seconds</option>
+                <option value="5s">5 seconds</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
@@ -260,9 +273,15 @@
                 data-range-for="latency"
                 id="rangeLatency"
               >
-                <option value="30s">30 seconds</option>
+                <option value="5s">5 seconds</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
@@ -299,9 +318,15 @@
                 data-range-for="jitter"
                 id="rangeJitter"
               >
-                <option value="30s">30 seconds</option>
+                <option value="5s">5 seconds</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
@@ -337,9 +362,15 @@
                 data-range-for="dns"
                 id="rangeDns"
               >
-                <option value="30s">30 seconds</option>
+                <option value="5s">5 seconds</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
@@ -375,9 +406,15 @@
                 data-range-for="speed"
                 id="rangeSpeed"
               >
-                <option value="30s">Last tests (~short)</option>
+                <option value="5s">Last tests (~short)</option>
+                <option value="10s">10 seconds</option>
+                <option value="15s">15 seconds</option>
+                <option value="30s" selected>30 seconds</option>
+                <option value="45s">45 seconds</option>
+                <option value="60s">60 seconds</option>
+                <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
-                <option value="1h" selected>1 hour</option>
+                <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
                 <option value="12h">12 hours</option>
