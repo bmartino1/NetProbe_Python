@@ -80,13 +80,30 @@ The frontend polls the APIs (JSON) and renders gauges + history charts.
 
 ---
 
+## Quick start (Docker Run)
+
+```bash
+docker run -d \
+  --name netprobe \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v /mnt/user/appdata/netprobe/database:/data \
+  -e DB_ENGINE=sqlite \
+  -e USE_POSTGRES=false \
+  -e ROUTER_IP=192.168.1.1 \
+  -e DNS_NAMESERVER_4="LAN_DNS" \
+  -e DNS_NAMESERVER_4_IP=192.168.1.1 \
+  bmmbmm01/netprobe
+```
+
 ## Quick start (Docker Compose)
 
 ```yaml
 # docker-compose.yml
 services:
   netprobe:
-    build: ./probe
+    image: bmmbmm01/netprobe:latest
+    #build: ./probe #github clone and build run your own...
     container_name: netprobe
     restart: unless-stopped
 
@@ -142,31 +159,40 @@ volumes:
   netprobe_data:
 ```
 
+** Both Quick Starts use the sqlfile option for longterm persitent data... Postgress backend change over is avilable via adational docker options latter
+
 ---
 ## Environment variables
 
-| Variable                    | Default                                      | Description                                                  |
-|----------------------------|----------------------------------------------|--------------------------------------------------------------|
-| `WEB_PORT`                 | `8080`                                       | Port inside container for the web UI / API.                 |
-| `DB_PATH`                  | `/data/netprobe.sqlite`                      | SQLite DB path.                                             |
-| `PROBE_INTERVAL`           | `30`                                         | Seconds between probe runs.                                 |
-| `PING_COUNT`               | `20`                                         | ICMP packets per target per probe.                          |
-| `APP_TIMEZONE`             | `UTC`                                        | Label shown in UI (no TZ conversion yet).                   |
-| `SITES`                    | `fast.com,google.com,youtube.com,amazon.com` | Comma-separated ping targets.                               |
-| `ROUTER_IP`                | *(empty)*                                    | Optional LAN router IP.                                     |
-| `DNS_TEST_SITE`            | `google.com`                                 | Domain for DNS latency tests.                               |
-| `DNS_NAMESERVER_1..4`      | *(labels)*                                   | Human-readable DNS names for UI.                            |
-| `DNS_NAMESERVER_1..4_IP`   | *(IPs)*                                      | DNS IPs to probe.                                           |
-| `WEIGHT_LOSS`              | `0.6`                                        | Weight of packet loss in score (0–1, sum = 1).              |
-| `WEIGHT_LATENCY`           | `0.15`                                       | Weight of latency.                                          |
-| `WEIGHT_JITTER`            | `0.2`                                        | Weight of jitter.                                           |
-| `WEIGHT_DNS_LATENCY`       | `0.05`                                       | Weight of DNS latency.                                      |
-| `THRESHOLD_LOSS`           | `5`                                          | Loss % considered “max bad” for scoring.                    |
-| `THRESHOLD_LATENCY`        | `100`                                        | Latency ms considered “max bad”.                            |
-| `THRESHOLD_JITTER`         | `30`                                         | Jitter ms considered “max bad”.                             |
-| `THRESHOLD_DNS_LATENCY`    | `100`                                        | DNS ms considered “max bad”.                                |
-| `SPEEDTEST_ENABLED`        | `True`                                       | Enable periodic speedtests.                                 |
-| `SPEEDTEST_INTERVAL`       | `14400`                                      | Seconds between automatic speedtests.                       |
+| Variable                  | Default                                      | Description                                                                 |
+|---------------------------|----------------------------------------------|-----------------------------------------------------------------------------|
+| `WEB_PORT`                | `8080`                                       | Port inside container for the web UI / API.                                |
+| `DB_PATH`                 | `/data/netprobe.sqlite`                      | SQLite DB path (used when `DB_ENGINE=sqlite`).                             |
+| `DB_ENGINE`               | `sqlite`                                     | Database backend: `sqlite` or `postgres`.                                  |
+| `USE_POSTGRES`            | *(empty)*                                    | Legacy flag; if `true`, forces Postgres unless `DB_ENGINE` is set.         |
+| `POSTGRES_HOST`           | `postgres`                                   | Postgres host when `DB_ENGINE=postgres` or `USE_POSTGRES=true`.            |
+| `POSTGRES_PORT`           | `5432`                                       | Postgres TCP port.                                                         |
+| `POSTGRES_DB`             | `netprobe`                                   | Postgres database name.                                                    |
+| `POSTGRES_USER`           | `netprobe`                                   | Postgres username.                                                         |
+| `POSTGRES_PASSWORD`       | `netprobe`                                   | Postgres password.                                                         |
+| `PROBE_INTERVAL`          | `30`                                         | Seconds between probe runs.                                                |
+| `PING_COUNT`              | `20`                                         | ICMP packets per target per probe.                                         |
+| `APP_TIMEZONE`            | `UTC`                                        | Label shown in UI (no TZ conversion yet).                                  |
+| `SITES`                   | `fast.com,google.com,youtube.com,amazon.com` | Comma-separated ping targets.                                              |
+| `ROUTER_IP`               | *(empty)*                                    | Optional LAN router IP.                                                    |
+| `DNS_TEST_SITE`           | `google.com`                                 | Domain for DNS latency tests.                                              |
+| `DNS_NAMESERVER_1..4`     | *(labels)*                                   | Human-readable DNS names for UI.                                           |
+| `DNS_NAMESERVER_1..4_IP`  | *(IPs)*                                      | DNS IPs to probe.                                                          |
+| `WEIGHT_LOSS`             | `0.6`                                        | Weight of packet loss in score (0–1, sum = 1).                             |
+| `WEIGHT_LATENCY`          | `0.15`                                       | Weight of latency.                                                         |
+| `WEIGHT_JITTER`           | `0.2`                                        | Weight of jitter.                                                          |
+| `WEIGHT_DNS_LATENCY`      | `0.05`                                       | Weight of DNS latency.                                                     |
+| `THRESHOLD_LOSS`          | `5`                                          | Loss % considered “max bad” for scoring.                                   |
+| `THRESHOLD_LATENCY`       | `100`                                        | Latency ms considered “max bad”.                                           |
+| `THRESHOLD_JITTER`        | `30`                                         | Jitter ms considered “max bad”.                                            |
+| `THRESHOLD_DNS_LATENCY`   | `100`                                        | DNS ms considered “max bad”.                                               |
+| `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                |
+| `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                      |
 
 You can also put these in `config.env` and uncomment `env_file` in the
 Compose file.
@@ -278,5 +304,5 @@ docker logs netprobe
   Speedtest: ping=… down=… up=…
   ```
 
-- Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...)(
+- Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...) 
 - Use the Run Speedtest Now button in the UI to verify it works on demand
