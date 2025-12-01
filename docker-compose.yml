@@ -1,26 +1,33 @@
+# docker-compose.yml
 #version: "3.8"
 
 services:
   netprobe:
     build: ./probe
-    # image: bmmbmm01/netprobe:latest   # use this instead of build when pushing to Docker Hub
+    # When you push to Docker Hub, you can use the prebuilt image instead:
+    # image: bmmbmm01/netprobe:latest
     container_name: netprobe
     restart: unless-stopped
 
-    env_file:
-      - ./probe/config.env
+    # If you want to keep config in a file:
+    # env_file:
+    #   - ./probe/config.env
 
     environment:
-      # Web UI port (inside container)
+      # ---- Core app settings ----
       WEB_PORT: ${WEB_PORT:-8080}
+      DB_PATH: ${DB_PATH:-/data/netprobe.sqlite}
+      PROBE_INTERVAL: ${PROBE_INTERVAL:-30}
+      PING_COUNT: ${PING_COUNT:-20}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
 
-      # Site target list (limit ~5 sites / domains)
+      # Ping targets
       SITES: ${SITES:-fast.com,google.com,youtube.com,amazon.com}
+      ROUTER_IP: ${ROUTER_IP:-}
 
-      # DNS test site
+      # DNS config
       DNS_TEST_SITE: ${DNS_TEST_SITE:-google.com}
 
-      # DNS name servers (4 slots, last typically your home DNS)
       DNS_NAMESERVER_1: ${DNS_NAMESERVER_1:-Google_DNS}
       DNS_NAMESERVER_1_IP: ${DNS_NAMESERVER_1_IP:-8.8.8.8}
       DNS_NAMESERVER_2: ${DNS_NAMESERVER_2:-Quad9_DNS}
@@ -51,6 +58,18 @@ services:
 
     volumes:
       - netprobe_data:/data
+
+    # Optional: if you need extra network capabilities for ping, etc.
+    #cap_add:
+    #  - NET_RAW
+    #  - NET_ADMIN
+    #  - SYS_ADMIN
+
+    # Optional: use an existing host network on Unraid (e.g. br0)
+    #networks:
+    #  default:
+    #    external: true
+    #    name: br0
 
 volumes:
   netprobe_data:
