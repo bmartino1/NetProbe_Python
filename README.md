@@ -118,7 +118,7 @@ services:
       PING_COUNT: 4
 
       SITES: fast.com,google.com,youtube.com
-      ROUTER_IP: 192.168.2.1
+      ROUTER_IP: 192.168.1.1
 
       DNS_TEST_SITE: google.com
       DNS_NAMESERVER_1: Google_DNS
@@ -128,7 +128,7 @@ services:
       DNS_NAMESERVER_3: CloudFlare_DNS
       DNS_NAMESERVER_3_IP: 1.1.1.1
       DNS_NAMESERVER_4: My_DNS_Server
-      DNS_NAMESERVER_4_IP: 192.168.2.3
+      DNS_NAMESERVER_4_IP: 192.168.1.1
 
       WEIGHT_LOSS: 0.6
       WEIGHT_LATENCY: 0.15
