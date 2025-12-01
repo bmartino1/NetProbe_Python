@@ -80,6 +80,17 @@
         overflow-y: auto;
         white-space: pre-wrap;
       }
+      .toggle-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 0.85rem;
+      }
+      .toggle-row label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
       .metric-panel {
         background: #181818;
         border-radius: 10px;
@@ -161,13 +172,66 @@
             Speedtest: not run yet
           </div>
         </div>
+
+        <!-- Section visibility toggles -->
+        <div class="toggle-row">
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelScore"
+              checked
+            />Internet Quality</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelLoss"
+              checked
+            />Packet Loss</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelLatency"
+              checked
+            />Latency</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelJitter"
+              checked
+            />Jitter</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelDns"
+              checked
+            />DNS</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              class="panel-toggle"
+              data-target="panelSpeed"
+              checked
+            />Bandwidth</label
+          >
+        </div>
+
         <div class="general-output" id="generalOutput">
           Ready.
         </div>
       </div>
 
       <!-- Internet Quality Score panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelScore">
         <div class="metric-left">
           <div class="metric-title">Internet Quality Score</div>
           <canvas id="gScore"></canvas>
@@ -191,6 +255,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -198,6 +263,8 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
@@ -205,14 +272,13 @@
           <canvas id="cScoreHistory"></canvas>
           <div class="metric-details">
             Composite score from 0–100 based on packet loss, latency, jitter,
-            and DNS response time. Higher is better; values below ~80 may
-            indicate degraded experience.
+            and DNS response time.
           </div>
         </div>
       </div>
 
       <!-- Packet Loss panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelLoss">
         <div class="metric-left">
           <div class="metric-title">Packet Loss (Avg)</div>
           <canvas id="gLoss"></canvas>
@@ -236,6 +302,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -243,6 +310,8 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
@@ -250,14 +319,12 @@
           <canvas id="cLossHistory"></canvas>
           <div class="metric-details">
             Percentage of ICMP packets that never reach their destination.
-            Healthy connections are usually near 0%. Spikes may indicate
-            congestion, cabling issues, or ISP problems.
           </div>
         </div>
       </div>
 
       <!-- Latency panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelLatency">
         <div class="metric-left">
           <div class="metric-title">Latency to Anchors (Avg)</div>
           <canvas id="gLatency"></canvas>
@@ -281,6 +348,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -288,21 +356,21 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cLatencyHistory"></canvas>
           <div class="metric-details">
-            Round-trip time to your router / gateway and several public sites.
-            Persistent high latency affects games, VoIP, and other real-time
-            applications.
+            Round-trip time to your router / gateway and public sites.
           </div>
         </div>
       </div>
 
       <!-- Jitter panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelJitter">
         <div class="metric-left">
           <div class="metric-title">Jitter (Avg)</div>
           <canvas id="gJitter"></canvas>
@@ -326,6 +394,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -333,20 +402,21 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cJitterHistory"></canvas>
           <div class="metric-details">
-            Variation in latency over time. High jitter is bad for interactive
-            traffic even when average latency looks fine.
+            Variation in latency over time.
           </div>
         </div>
       </div>
 
       <!-- DNS panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelDns">
         <div class="metric-left">
           <div class="metric-title">DNS Response Time (Avg)</div>
           <canvas id="gDns"></canvas>
@@ -370,6 +440,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -377,20 +448,21 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cDnsHistory"></canvas>
           <div class="metric-details">
-            Time for DNS servers to resolve the test domain. High values may
-            cause pages to feel "slow to start" even if raw bandwidth is good.
+            Time for DNS servers to resolve the test domain.
           </div>
         </div>
       </div>
 
       <!-- Speedtest / Bandwidth panel -->
-      <div class="metric-panel">
+      <div class="metric-panel" id="panelSpeed">
         <div class="metric-left">
           <div class="metric-title">Internet Bandwidth (Speedtest)</div>
           <canvas id="gSpeed"></canvas>
@@ -414,6 +486,7 @@
                 <option value="60s">60 seconds</option>
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="30m">30 minutes</option>
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
@@ -421,14 +494,15 @@
                 <option value="24h">24 hours</option>
                 <option value="1w">1 week</option>
                 <option value="1m">1 month</option>
+                <option value="3mo">3 months</option>
+                <option value="6mo">6 months</option>
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cSpeedHistory"></canvas>
           <div class="metric-details">
-            Periodic bandwidth test using speedtest.net. Manual tests triggered
-            via the button above are also stored here for historical analysis.
+            Periodic bandwidth test using speedtest.net, plus manual tests.
           </div>
         </div>
       </div>
