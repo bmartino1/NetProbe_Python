@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
     dnsutils \
     curl \
+    bash \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,4 +28,5 @@ COPY static ./static
 ENV WEB_PORT=8080
 
 # Use Gunicorn instead of Flask dev server
-CMD ["sh", "-c", "gunicorn -w 2 -b 0.0.0.0:${WEB_PORT:-8080} app:app"]
+#CMD ["sh", "-c", "gunicorn -w 2 -b 0.0.0.0:${WEB_PORT:-8080} app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "--workers", "1", "--log-level", "info", "app:app"]
