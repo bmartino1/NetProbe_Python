@@ -1,3 +1,4 @@
 Flask
 dnspython
 speedtest-cli
+gunicorn
