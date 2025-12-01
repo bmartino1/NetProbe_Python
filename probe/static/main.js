@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const generalOutput = document.getElementById("generalOutput");
   const speedtestSummary = document.getElementById("speedtestSummary");
 
+  const dbBackendEl = document.getElementById("dbBackend");
+
   const btnShowConfig = document.getElementById("btnShowConfig");
   const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
   const rangeSelects = document.querySelectorAll(".range-select");
@@ -34,26 +36,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function rangeValueToLimit(value) {
     const secondsMap = {
+      // seconds
       "5s": 5,
       "10s": 10,
       "15s": 15,
       "30s": 30,
       "45s": 45,
       "60s": 60,
+
+      // minutes
       "5m": 5 * 60,
+      "10min": 10 * 60,
       "15m": 15 * 60,
+      "20min": 20 * 60,
       "30m": 30 * 60,
+      "45min": 45 * 60,
+
+      // hours
       "1h": 60 * 60,
       "3h": 3 * 60 * 60,
       "6h": 6 * 60 * 60,
+      "9h": 9 * 60 * 60,
       "12h": 12 * 60 * 60,
       "24h": 24 * 60 * 60,
+
+      // days
+      "3d": 3 * 24 * 60 * 60,
+      "5d": 5 * 24 * 60 * 60,
+
+      // weeks
       "1w": 7 * 24 * 60 * 60,
-      "1m": 30 * 24 * 60 * 60,
+      "2w": 14 * 24 * 60 * 60,
+      "3w": 21 * 24 * 60 * 60,
+
+      // months (approx 30 days each)
+      "1m": 30 * 24 * 60 * 60,   // keep legacy key
+      "1mo": 30 * 24 * 60 * 60,
+      "2mo": 60 * 24 * 60 * 60,
       "3mo": 90 * 24 * 60 * 60,
+      "4mo": 120 * 24 * 60 * 60,
+      "5mo": 150 * 24 * 60 * 60,
       "6mo": 180 * 24 * 60 * 60,
+      "7mo": 210 * 24 * 60 * 60,
+      "8mo": 240 * 24 * 60 * 60,
+      "9mo": 270 * 24 * 60 * 60,
+      "10mo": 300 * 24 * 60 * 60,
+      "11mo": 330 * 24 * 60 * 60,
+      "12mo": 365 * 24 * 60 * 60,
+
+      // year
       "1y": 365 * 24 * 60 * 60,
     };
+
     const secs = secondsMap[value] || 60 * 60;
     const points = Math.floor(secs / probeInterval);
     return Math.max(10, Math.min(points, 10000));
@@ -400,9 +434,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch("/api/config");
     const cfg = await res.json();
 
+    if (dbBackendEl && cfg.db_engine) {
+      dbBackendEl.textContent = `DB: ${cfg.db_engine}`;
+    } else if (dbBackendEl && !cfg.db_engine) {
+      dbBackendEl.textContent = "DB: sqlite";
+    }
+
     const lines = [];
 
     lines.push("== Probe Settings ==");
+    lines.push(`DB engine: ${cfg.db_engine || "sqlite"}`);
     lines.push(`Probe interval: ${cfg.probe_interval}s`);
     lines.push(`Ping count per target: ${cfg.ping_count}`);
     lines.push(`Timezone: ${cfg.app_timezone}`);
@@ -658,7 +699,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ----------------- Initial loads -----------------
 
-  // First, load config so DNS labels are available,
+  // First, load config so DNS labels and DB badge are available,
   // then kick off data refreshes.
   showConfig()
     .catch(() => {
