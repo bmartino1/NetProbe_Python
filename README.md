@@ -173,9 +173,9 @@ Compose file.
 
 ---
 
-## API overview
+## API code overview...
 
-The frontend uses these JSON endpoints (you can also query them yourself):
+The frontend uses these JSON endpoints (you can also query them yourself by calling the python venv...):
 
 - `GET /` – main UI.
 - `GET /api/score/recent?limit=N`  
@@ -228,3 +228,55 @@ The frontend uses these JSON endpoints (you can also query them yourself):
     }
   }
 
+---
+
+## Troubleshooting
+
+### Charts all show 100% loss / very high latency
+
+- Let it run for 5 min... internet average takes time to build per defualt weights...
+- Ensure the container has the needed capabilities:
+  - `NET_RAW`, `NET_ADMIN`, `SYS_ADMIN`
+- From the host, verify basic connectivity from inside the container:
+  ```bash
+  docker exec -it netprobe ping -c 3 8.8.8.8
+  ```
+  
+- If this fails, fix host networking / firewall before debugging Netprobe.
+
+---
+
+### DNS panel is flat or empty
+
+- Confirm `DNS_TEST_SITE` resolves inside the container:
+
+  ```bash
+  docker exec -it netprobe nslookup google.com 8.8.8.8
+  ```
+
+
+- Verify that `DNS_NAMESERVER_X_IP` values are correct and reachable.
+- Click **Show Config / Env** in the UI to confirm DNS servers are parsed as expected.
+
+### Speedtest never runs
+
+Check that:
+
+```bash
+echo $SPEEDTEST_ENABLED
+# should be: True
+```
+
+- Look at logs:
+
+```bash
+docker logs netprobe
+```
+
+- You should see lines like:
+  ```
+  You should see lines like:
+  ```
+
+- Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...)(
+- Use the Run Speedtest Now button in the UI to verify it works on demand
