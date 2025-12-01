@@ -18,11 +18,11 @@ services:
       WEB_PORT: ${WEB_PORT:-8080}
       DB_PATH: ${DB_PATH:-/data/netprobe.sqlite}
       PROBE_INTERVAL: ${PROBE_INTERVAL:-30}
-      PING_COUNT: ${PING_COUNT:-20}
+      PING_COUNT: ${PING_COUNT:-5}
       APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
 
       # Ping targets
-      SITES: ${SITES:-fast.com,google.com,youtube.com,amazon.com}
+      SITES: ${SITES:-fast.com,google.com,youtube.com}
       ROUTER_IP: ${ROUTER_IP:-}
 
       # DNS config
@@ -73,3 +73,9 @@ services:
 
 volumes:
   netprobe_data:
+#Unraid Optional Bind Mount Volume to folder...
+#    driver: local
+#    driver_opts:
+#      type: none
+#      device: /mnt/user/appdata/netprobe/database
+#      o: bind
