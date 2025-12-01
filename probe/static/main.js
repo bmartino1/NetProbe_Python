@@ -18,9 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnShowConfig = document.getElementById("btnShowConfig");
   const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
   const rangeSelects = document.querySelectorAll(".range-select");
+  const panelToggles = document.querySelectorAll(".panel-toggle");
 
   let lastTimestamp = null;
-  let currentLimit = 0; // computed from range selection
+  let currentLimit = 0;
 
   // ----------------- Range → limit helper -----------------
 
@@ -34,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "60s": 60,
       "5m": 5 * 60,
       "15m": 15 * 60,
+      "30m": 30 * 60,
       "1h": 60 * 60,
       "3h": 3 * 60 * 60,
       "6h": 6 * 60 * 60,
@@ -41,6 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
       "24h": 24 * 60 * 60,
       "1w": 7 * 24 * 60 * 60,
       "1m": 30 * 24 * 60 * 60,
+      "3mo": 90 * 24 * 60 * 60,
+      "6mo": 180 * 24 * 60 * 60,
       "1y": 365 * 24 * 60 * 60,
     };
     const secs = secondsMap[value] || 60 * 60;
@@ -103,7 +107,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("gDns").getContext("2d"),
     "DNS"
   );
-
   const gSpeed = makeGauge(
     document.getElementById("gSpeed").getContext("2d"),
     "Bandwidth"
@@ -145,9 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "Loss %"
   );
   const cLatencyHistory = makeHistoryChart(
-    document
-      .getElementById("cLatencyHistory")
-      .getContext("2d"),
+    document.getElementById("cLatencyHistory").getContext("2d"),
     "Latency ms"
   );
   const cJitterHistory = makeHistoryChart(
@@ -370,7 +371,6 @@ document.addEventListener("DOMContentLoaded", () => {
     cSpeedHistory.data.datasets[1].data = ups;
     cSpeedHistory.update();
 
-    // Update bandwidth gauge to show most recent test
     const last = tests[tests.length - 1];
     const maxMbps = Math.max(...downs, ...ups, 1);
     const used = clamp(
@@ -448,7 +448,6 @@ document.addEventListener("DOMContentLoaded", () => {
         1
       )} ms)`;
 
-      // refresh chart / gauge with new result in DB
       refreshSpeedtestHistory();
     } catch (e) {
       generalOutput.textContent = "Speedtest error: " + e;
@@ -471,9 +470,52 @@ document.addEventListener("DOMContentLoaded", () => {
     nextProbeEl.textContent = `Next probe in: ${remaining}s`;
   }
 
+  // ----------------- Panel visibility (checkboxes) -----------------
+
+  function applyPanelVisibilityFromStorage() {
+    const saved = localStorage.getItem("netprobe_panel_vis");
+    let vis = {};
+    if (saved) {
+      try {
+        vis = JSON.parse(saved);
+      } catch (_) {
+        vis = {};
+      }
+    }
+    panelToggles.forEach((cb) => {
+      const targetId = cb.getAttribute("data-target");
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      const key = targetId;
+      const shouldShow = vis[key] !== undefined ? vis[key] : true;
+      cb.checked = shouldShow;
+      panel.style.display = shouldShow ? "" : "none";
+    });
+  }
+
+  function savePanelVisibility() {
+    const vis = {};
+    panelToggles.forEach((cb) => {
+      const targetId = cb.getAttribute("data-target");
+      vis[targetId] = cb.checked;
+    });
+    localStorage.setItem("netprobe_panel_vis", JSON.stringify(vis));
+  }
+
+  panelToggles.forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const targetId = cb.getAttribute("data-target");
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      panel.style.display = cb.checked ? "" : "none";
+      savePanelVisibility();
+    });
+  });
+
+  applyPanelVisibilityFromStorage();
+
   // ----------------- Event wiring -----------------
 
-  // Range selects: keep all in sync; change one → update all & refresh
   rangeSelects.forEach((sel) => {
     sel.addEventListener("change", () => {
       const value = sel.value;
@@ -494,9 +536,8 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshProbeData();
   refreshSpeedtestHistory();
   refreshSpeedtestSummaryOnce();
-  showConfig(); // populate general area
+  showConfig();
 
-  // Periodic refresh & countdown
   setInterval(
     () => {
       refreshProbeData();
