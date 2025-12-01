@@ -1,10 +1,15 @@
 // static/main.js
 
 document.addEventListener("DOMContentLoaded", () => {
+  const rawProbeInterval = parseInt(
+    document.body.getAttribute("data-probe-interval"),
+    10
+  );
   const probeInterval =
-    parseInt(document.body.getAttribute("data-probe-interval"), 10) || 30;
+    !isNaN(rawProbeInterval) && rawProbeInterval > 0
+      ? rawProbeInterval
+      : 30;
 
-  const rangeSelect = document.getElementById("rangeSelect");
   const nextProbeEl = document.getElementById("nextProbe");
   const lastProbeEl = document.getElementById("lastProbe");
   const generalOutput = document.getElementById("generalOutput");
@@ -12,9 +17,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const btnShowConfig = document.getElementById("btnShowConfig");
   const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
+  const rangeSelects = document.querySelectorAll(".range-select");
 
   let lastTimestamp = null;
-  let currentLimit = parseInt(rangeSelect.value, 10) || 300;
+  let currentLimit = 0; // computed from range selection
+
+  // ----------------- Range → limit helper -----------------
+
+  function rangeValueToLimit(value) {
+    const secondsMap = {
+      "30s": 30,
+      "15m": 15 * 60,
+      "1h": 60 * 60,
+      "3h": 3 * 60 * 60,
+      "6h": 6 * 60 * 60,
+      "12h": 12 * 60 * 60,
+      "24h": 24 * 60 * 60,
+      "1w": 7 * 24 * 60 * 60,
+      "1m": 30 * 24 * 60 * 60,
+      "1y": 365 * 24 * 60 * 60,
+    };
+    const secs = secondsMap[value] || 60 * 60;
+    const points = Math.floor(secs / probeInterval);
+    return Math.max(10, Math.min(points, 10000));
+  }
+
+  function initCurrentLimit() {
+    if (rangeSelects.length === 0) {
+      currentLimit = 2880;
+    } else {
+      currentLimit = rangeValueToLimit(rangeSelects[0].value);
+    }
+  }
+
+  initCurrentLimit();
 
   // ----------------- Charts & Gauges -----------------
 
@@ -62,6 +98,11 @@ document.addEventListener("DOMContentLoaded", () => {
     "DNS"
   );
 
+  const gSpeed = makeGauge(
+    document.getElementById("gSpeed").getContext("2d"),
+    "Bandwidth"
+  );
+
   function makeHistoryChart(ctx, label) {
     return new Chart(ctx, {
       type: "line",
@@ -98,7 +139,9 @@ document.addEventListener("DOMContentLoaded", () => {
     "Loss %"
   );
   const cLatencyHistory = makeHistoryChart(
-    document.getElementById("cLatencyHistory").getContext("2d"),
+    document
+      .getElementById("cLatencyHistory")
+      .getContext("2d"),
     "Latency ms"
   );
   const cJitterHistory = makeHistoryChart(
@@ -110,13 +153,47 @@ document.addEventListener("DOMContentLoaded", () => {
     "DNS ms"
   );
 
+  const cSpeedHistory = new Chart(
+    document.getElementById("cSpeedHistory").getContext("2d"),
+    {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Download Mbps",
+            data: [],
+            fill: false,
+            tension: 0.1,
+          },
+          {
+            label: "Upload Mbps",
+            data: [],
+            fill: false,
+            tension: 0.1,
+          },
+        ],
+      },
+      options: {
+        scales: {
+          x: {
+            ticks: { maxTicksLimit: 8 },
+          },
+          y: {
+            beginAtZero: true,
+          },
+        },
+      },
+    }
+  );
+
   function clamp(val, max) {
     return Math.min(val, max);
   }
 
-  // ----------------- Data refresh -----------------
+  // ----------------- Probe data refresh -----------------
 
-  async function refreshData() {
+  async function refreshProbeData() {
     const res = await fetch(`/api/score/recent?limit=${currentLimit}`);
     const json = await res.json();
     const data = json.data || [];
@@ -135,35 +212,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const jitter = last.avg_jitter_ms || 0;
     const dns = last.avg_dns_latency_ms || 0;
 
-    // Last/next probe text
     const lastDate = new Date(last.ts * 1000);
     lastProbeEl.textContent = `Last probe: ${lastDate.toLocaleString()}`;
 
-    // Score gauge
+    // Gauges
     gScore.data.datasets[0].data = [score, 100 - score];
     gScore.update();
 
-    // Loss gauge (0–100%)
     const lossGaugeVal = clamp(loss, 100);
     gLoss.data.datasets[0].data = [100 - lossGaugeVal, lossGaugeVal];
     gLoss.update();
 
-    // Latency gauge (0–200 ms)
     const latencyGaugeVal = clamp(latency, 200);
-    gLatency.data.datasets[0].data = [200 - latencyGaugeVal, latencyGaugeVal];
+    gLatency.data.datasets[0].data = [
+      200 - latencyGaugeVal,
+      latencyGaugeVal,
+    ];
     gLatency.update();
 
-    // Jitter gauge (0–100 ms)
     const jitterGaugeVal = clamp(jitter, 100);
-    gJitter.data.datasets[0].data = [100 - jitterGaugeVal, jitterGaugeVal];
+    gJitter.data.datasets[0].data = [
+      100 - jitterGaugeVal,
+      jitterGaugeVal,
+    ];
     gJitter.update();
 
-    // DNS gauge (0–200 ms)
     const dnsGaugeVal = clamp(dns, 200);
     gDns.data.datasets[0].data = [200 - dnsGaugeVal, dnsGaugeVal];
     gDns.update();
 
-    // Text labels
+    // Gauge text
     document.getElementById(
       "gScoreText"
     ).innerText = `Score: ${score.toFixed(1)}%`;
@@ -190,7 +268,9 @@ document.addEventListener("DOMContentLoaded", () => {
     cScoreHistory.update();
 
     cLossHistory.data.labels = labels;
-    cLossHistory.data.datasets[0].data = data.map((d) => d.avg_loss_pct);
+    cLossHistory.data.datasets[0].data = data.map(
+      (d) => d.avg_loss_pct
+    );
     cLossHistory.update();
 
     cLatencyHistory.data.labels = labels;
@@ -200,7 +280,9 @@ document.addEventListener("DOMContentLoaded", () => {
     cLatencyHistory.update();
 
     cJitterHistory.data.labels = labels;
-    cJitterHistory.data.datasets[0].data = data.map((d) => d.avg_jitter_ms);
+    cJitterHistory.data.datasets[0].data = data.map(
+      (d) => d.avg_jitter_ms
+    );
     cJitterHistory.update();
 
     cDnsHistory.data.labels = labels;
@@ -258,7 +340,61 @@ document.addEventListener("DOMContentLoaded", () => {
     generalOutput.textContent = lines.join("\n");
   }
 
-  // ----------------- Speedtest Now -----------------
+  // ----------------- Speedtest handling -----------------
+
+  async function refreshSpeedtestHistory() {
+    const res = await fetch(
+      `/api/speedtest/history?limit=${currentLimit}`
+    );
+    const json = await res.json();
+    const tests = json.tests || [];
+    if (!tests.length) {
+      return;
+    }
+
+    const labels = tests.map((t) =>
+      new Date(t.ts * 1000).toLocaleTimeString()
+    );
+    const downs = tests.map((t) => t.download_mbps);
+    const ups = tests.map((t) => t.upload_mbps);
+
+    cSpeedHistory.data.labels = labels;
+    cSpeedHistory.data.datasets[0].data = downs;
+    cSpeedHistory.data.datasets[1].data = ups;
+    cSpeedHistory.update();
+
+    // Update bandwidth gauge to show most recent test
+    const last = tests[tests.length - 1];
+    const maxMbps = Math.max(...downs, ...ups, 1);
+    const used = clamp(
+      (last.download_mbps / maxMbps) * 100,
+      100
+    );
+    gSpeed.data.datasets[0].data = [used, 100 - used];
+    gSpeed.update();
+
+    document.getElementById(
+      "gSpeedText"
+    ).innerText = `Down: ${last.download_mbps.toFixed(
+      1
+    )} Mbps\nUp: ${last.upload_mbps.toFixed(1)} Mbps`;
+  }
+
+  async function refreshSpeedtestSummaryOnce() {
+    try {
+      const res = await fetch("/api/speedtest/latest");
+      const json = await res.json();
+      const r = json.result;
+      if (!r) return;
+      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
+        1
+      )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
+        1
+      )} ms)`;
+    } catch (e) {
+      // ignore
+    }
+  }
 
   async function runSpeedtestNow() {
     generalOutput.textContent = "Running speedtest… this can take a bit…";
@@ -278,7 +414,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const json = await res.json();
       if (!json.success) {
         generalOutput.textContent =
-          "Speedtest failed: " + (json.error || "unknown error");
+          "Speedtest failed: " + (json.error || "unknownerror");
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
@@ -293,7 +429,9 @@ document.addEventListener("DOMContentLoaded", () => {
       ];
       if (r.server) {
         const s = r.server;
-        const srvStr = `${s.name || ""} (${s.host || ""}) [${s.country || ""}]`;
+        const srvStr = `${s.name || ""} (${s.host || ""}) [${
+          s.country || ""
+        }]`;
         textLines.push(`Server: ${srvStr}`);
       }
       generalOutput.textContent = textLines.join("\n");
@@ -302,6 +440,9 @@ document.addEventListener("DOMContentLoaded", () => {
       )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
         1
       )} ms)`;
+
+      // refresh chart / gauge with new result in DB
+      refreshSpeedtestHistory();
     } catch (e) {
       generalOutput.textContent = "Speedtest error: " + e;
       speedtestSummary.textContent = "Speedtest: error";
@@ -316,41 +457,46 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const nowSec = Math.floor(Date.now() / 1000);
-    const nextTs = lastTimestamp + probeInterval;
-    let remaining = nextTs - nowSec;
-    if (remaining < 0) remaining = 0;
+    let elapsed = nowSec - lastTimestamp;
+    if (elapsed < 0) elapsed = 0;
+    let remaining = probeInterval - (elapsed % probeInterval);
+    if (remaining === probeInterval) remaining = 0;
     nextProbeEl.textContent = `Next probe in: ${remaining}s`;
   }
 
   // ----------------- Event wiring -----------------
 
-  rangeSelect.addEventListener("change", () => {
-    currentLimit = parseInt(rangeSelect.value, 10) || 300;
-    refreshData();
+  // Range selects: keep all in sync; change one → update all & refresh
+  rangeSelects.forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const value = sel.value;
+      rangeSelects.forEach((s) => {
+        s.value = value;
+      });
+      currentLimit = rangeValueToLimit(value);
+      refreshProbeData();
+      refreshSpeedtestHistory();
+    });
   });
 
   btnShowConfig.addEventListener("click", showConfig);
   btnRunSpeedtest.addEventListener("click", runSpeedtestNow);
 
-  // Initial loads
-  refreshData();
-  showConfig(); // populate general area once at load
-  // Attempt to show latest speedtest if any
-  fetch("/api/speedtest/latest")
-    .then((r) => r.json())
-    .then((j) => {
-      if (j && j.result) {
-        const r = j.result;
-        speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
-          1
-        )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
-          1
-        )} ms)`;
-      }
-    })
-    .catch(() => {});
+  // ----------------- Initial loads -----------------
+
+  refreshProbeData();
+  refreshSpeedtestHistory();
+  refreshSpeedtestSummaryOnce();
+  showConfig(); // populate general area
 
   // Periodic refresh & countdown
-  setInterval(refreshData, Math.max(10, probeInterval)); // refresh at least every 10s
+  setInterval(
+    () => {
+      refreshProbeData();
+      refreshSpeedtestHistory();
+      refreshSpeedtestSummaryOnce();
+    },
+    Math.max(10 * 1000, probeInterval * 1000)
+  );
   setInterval(updateCountdown, 1000);
 });
