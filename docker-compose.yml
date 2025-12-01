@@ -2,9 +2,28 @@
 #version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: netprobe-postgres
+    restart: unless-stopped
+    # If you want to keep config in a file:
+    #env_file:
+    #  - ./probe/config.env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netprobe}
+      POSTGRES_USER: ${POSTGRES_USER:-netprobe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-netprobe}
+    volumes:
+      - netprobe_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netprobe} -d ${POSTGRES_DB:-netprobe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   netprobe:
     build: ./probe
-    # When you push to Docker Hub, you can use the prebuilt image instead:
+    # Image exist..., you gitclone the project and build run the image instead:
     # image: bmmbmm01/netprobe:latest
     container_name: netprobe
     restart: unless-stopped
@@ -13,12 +32,32 @@ services:
     # env_file:
     #   - ./probe/config.env
 
+    depends_on:
+      - postgres
+
     environment:
       # ---- Core app settings ----
       WEB_PORT: ${WEB_PORT:-8080}
+
+      # SQLite path (still used if DB_ENGINE=sqlite)
       DB_PATH: ${DB_PATH:-/data/netprobe.sqlite}
+
+      # Database backend:
+      #   postgres -> use the postgres service below
+      #   sqlite   -> use DB_PATH file
+      DB_ENGINE: ${DB_ENGINE:-postgres}
+      # Or alternatively, leave DB_ENGINE unset and use:
+      # USE_POSTGRES: ${USE_POSTGRES:-true}
+
+      # Postgres connection details (match the postgres service)
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-netprobe}
+      POSTGRES_USER: ${POSTGRES_USER:-netprobe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-netprobe}
+
       PROBE_INTERVAL: ${PROBE_INTERVAL:-30}
-      PING_COUNT: ${PING_COUNT:-5}
+      PING_COUNT: ${PING_COUNT:-4}
       APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
 
       # Ping targets
@@ -73,9 +112,16 @@ services:
 
 volumes:
   netprobe_data:
-#Unraid Optional Bind Mount Volume to folder...
-#    driver: local
-#    driver_opts:
-#      type: none
-#      device: /mnt/user/appdata/netprobe/database
-#      o: bind
+      # Unraid Optional Bind Mount Volume to folder...
+     #driver: local
+     #driver_opts:
+     #  type: none
+     #  device: /mnt/user/appdata/netprobe/sqlite
+     #  o: bind
+  netprobe_pgdata:
+    # Unraid Optional Bind Mount Volume to folder...
+     #driver: local
+     #driver_opts:
+     #  type: none
+     #  device: /mnt/user/appdata/netprobe/postgres
+     #  o: bind
