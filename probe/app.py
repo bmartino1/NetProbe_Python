@@ -74,6 +74,17 @@ def ensure_db():
         );
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS speedtests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            ping_ms REAL,
+            download_mbps REAL,
+            upload_mbps REAL
+        );
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -128,6 +139,39 @@ def fetch_latest():
     row = cur.fetchone()
     conn.close()
     return row
+
+
+def insert_speedtest(ts, ping_ms, download_mbps, upload_mbps):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO speedtests
+        (ts, ping_ms, download_mbps, upload_mbps)
+        VALUES (?, ?, ?, ?)
+        """,
+        (ts, ping_ms, download_mbps, upload_mbps),
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_speedtests(limit=2880):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ts, ping_ms, download_mbps, upload_mbps
+        FROM speedtests
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    rows.reverse()
+    return rows
 
 
 # -------------------------
@@ -244,19 +288,24 @@ latest_speedtest = None  # for API / UI display
 
 
 def run_speedtest_once():
-    """Run a single speedtest and return result dict (or None on failure)."""
+    """Run a single speedtest, insert into DB, return result dict (or None)."""
     try:
         st = speedtest.Speedtest()
         st.get_best_server()
         down = st.download()
         up = st.upload()
         res = st.results.dict()
+        ts = int(time.time())
+        ping_ms = float(res.get("ping") or 0.0)
+        download_mbps = down / (1024 * 1024)
+        upload_mbps = up / (1024 * 1024)
+        insert_speedtest(ts, ping_ms, download_mbps, upload_mbps)
         return {
-            "ping_ms": res.get("ping"),
-            "download_mbps": down / (1024 * 1024),
-            "upload_mbps": up / (1024 * 1024),
+            "timestamp": ts,
+            "ping_ms": ping_ms,
+            "download_mbps": download_mbps,
+            "upload_mbps": upload_mbps,
             "server": res.get("server", {}),
-            "timestamp": int(time.time()),
         }
     except Exception:
         return None
@@ -268,12 +317,14 @@ def run_speedtest_if_due():
         return
     now = time.time()
     with last_speedtest_lock:
-        if now - last_speedtest_ts < SPEEDTEST_INTERVAL:
+        # If we've never run a speedtest, run immediately.
+        if last_speedtest_ts != 0 and now - last_speedtest_ts < SPEEDTEST_INTERVAL:
             return
-        last_speedtest_ts = now
     result = run_speedtest_once()
     if result is not None:
-        latest_speedtest = result
+        with last_speedtest_lock:
+            latest_speedtest = result
+            last_speedtest_ts = result["timestamp"]
 
 
 def probe_loop():
@@ -411,10 +462,44 @@ def api_speedtest_run():
 
 @app.route("/api/speedtest/latest")
 def api_speedtest_latest():
-    """Optional endpoint to show last automatic/manual speedtest result."""
-    if latest_speedtest is None:
+    """Return most recent speedtest (from memory or DB)."""
+    global latest_speedtest
+    if latest_speedtest is not None:
+        return jsonify(result=latest_speedtest)
+
+    rows = fetch_speedtests(limit=1)
+    if not rows:
         return jsonify(result=None)
-    return jsonify(result=latest_speedtest)
+    ts, ping_ms, down, up = rows[0]
+    result = {
+        "timestamp": ts,
+        "ping_ms": ping_ms,
+        "download_mbps": down,
+        "upload_mbps": up,
+        "server": {},
+    }
+    latest_speedtest = result
+    return jsonify(result=result)
+
+
+@app.route("/api/speedtest/history")
+def api_speedtest_history():
+    try:
+        limit = int(request.args.get("limit", "2880"))
+    except ValueError:
+        limit = 2880
+    rows = fetch_speedtests(limit)
+    tests = [
+        {
+            "ts": r[0],
+            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+            "ping_ms": r[1],
+            "download_mbps": r[2],
+            "upload_mbps": r[3],
+        }
+        for r in rows
+    ]
+    return jsonify(tests=tests)
 
 
 def main():
