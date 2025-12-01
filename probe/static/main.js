@@ -20,8 +20,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const rangeSelects = document.querySelectorAll(".range-select");
   const panelToggles = document.querySelectorAll(".panel-toggle");
 
+  const dnsSeriesControls = document.getElementById("dns-series-controls");
+
   let lastTimestamp = null;
   let currentLimit = 0;
+
+  // DNS per-server label + dataset bookkeeping
+  let dnsServerLabels = {}; // ip -> label for checkboxes/legend
+  let dnsServerOrder = []; // array of ips in consistent order
+  let dnsDatasetsInitialized = false;
 
   // ----------------- Range → limit helper -----------------
 
@@ -198,6 +205,61 @@ document.addEventListener("DOMContentLoaded", () => {
     return Math.min(val, max);
   }
 
+  // ----------------- DNS per-server helpers -----------------
+
+  function ensureDnsDatasets(servers) {
+    if (!cDnsHistory || !Array.isArray(servers) || !servers.length) return;
+    if (dnsDatasetsInitialized) return;
+
+    dnsServerOrder = servers.slice();
+    cDnsHistory.data.datasets = [];
+    if (dnsSeriesControls) dnsSeriesControls.innerHTML = "";
+
+    servers.forEach((ip, idx) => {
+      const label = dnsServerLabels[ip] || ip;
+
+      // Chart dataset
+      cDnsHistory.data.datasets.push({
+        label,
+        data: [],
+        fill: false,
+        tension: 0.1,
+        hidden: false,
+      });
+
+      // Checkbox UI
+      if (dnsSeriesControls) {
+        const wrapper = document.createElement("label");
+        wrapper.className = "dns-series-label";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = true;
+        cb.dataset.dnsIndex = String(idx);
+
+        const span = document.createElement("span");
+        span.textContent = label;
+
+        wrapper.appendChild(cb);
+        wrapper.appendChild(span);
+        dnsSeriesControls.appendChild(wrapper);
+
+        cb.addEventListener("change", () => {
+          const i = parseInt(cb.dataset.dnsIndex, 10);
+          if (
+            !isNaN(i) &&
+            cDnsHistory.data.datasets[i] !== undefined
+          ) {
+            cDnsHistory.data.datasets[i].hidden = !cb.checked;
+            cDnsHistory.update();
+          }
+        });
+      }
+    });
+
+    dnsDatasetsInitialized = true;
+  }
+
   // ----------------- Probe data refresh -----------------
 
   async function refreshProbeData() {
@@ -292,10 +354,42 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     cJitterHistory.update();
 
+    // DNS: average + per-server, if available
     cDnsHistory.data.labels = labels;
-    cDnsHistory.data.datasets[0].data = data.map(
-      (d) => d.avg_dns_latency_ms
-    );
+
+    const firstRow = data[0];
+    if (firstRow && firstRow.dns_per_server) {
+      // We have per-server breakdown from backend
+      const servers = Object.keys(firstRow.dns_per_server);
+      ensureDnsDatasets(servers);
+
+      dnsServerOrder.forEach((ip, idx) => {
+        const series = data.map((d) => {
+          if (!d.dns_per_server) return null;
+          const v = d.dns_per_server[ip];
+          return typeof v === "number" ? v : null;
+        });
+        if (cDnsHistory.data.datasets[idx]) {
+          cDnsHistory.data.datasets[idx].data = series;
+        }
+      });
+    } else {
+      // Fallback: only average DNS, single line
+      if (!dnsDatasetsInitialized) {
+        cDnsHistory.data.datasets = [
+          {
+            label: "DNS ms",
+            data: [],
+            fill: false,
+            tension: 0.1,
+          },
+        ];
+        dnsDatasetsInitialized = true;
+      }
+      cDnsHistory.data.datasets[0].data = data.map(
+        (d) => d.avg_dns_latency_ms
+      );
+    }
     cDnsHistory.update();
   }
 
@@ -323,8 +417,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
     lines.push("== DNS ==");
     lines.push(`Test domain: ${cfg.dns_test_site}`);
-    if (cfg.dns_servers && cfg.dns_servers.length)
-      lines.push(`Servers: ${cfg.dns_servers.join(", ")}`);
+
+    // Build DNS labels map for chart + checkboxes
+    dnsServerLabels = {};
+    if (Array.isArray(cfg.dns_servers_detail)) {
+      // expecting [{name, ip}, ...]
+      cfg.dns_servers_detail.forEach((s) => {
+        if (!s || !s.ip) return;
+        const ip = s.ip;
+        const label = s.name ? `${s.name} (${ip})` : ip;
+        dnsServerLabels[ip] = label;
+      });
+      const displayList = cfg.dns_servers_detail
+        .map((s) =>
+          s && s.ip
+            ? (s.name ? `${s.name} (${s.ip})` : s.ip)
+            : null
+        )
+        .filter(Boolean);
+      if (displayList.length) {
+        lines.push(`Servers: ${displayList.join(", ")}`);
+      }
+    } else if (Array.isArray(cfg.dns_servers)) {
+      cfg.dns_servers.forEach((ip) => {
+        dnsServerLabels[ip] = ip;
+      });
+      if (cfg.dns_servers.length) {
+        lines.push(`Servers: ${cfg.dns_servers.join(", ")}`);
+      }
+    }
+
     lines.push("");
 
     lines.push("== Score Weights ==");
@@ -421,7 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const json = await res.json();
       if (!json.success) {
         generalOutput.textContent =
-          "Speedtest failed: " + (json.error || "unknownerror");
+          "Speedtest failed: " + (json.error || "unknown error");
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
@@ -528,15 +650,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  btnShowConfig.addEventListener("click", showConfig);
+  btnShowConfig.addEventListener("click", () => {
+    // fire-and-forget; UI will update via async
+    showConfig();
+  });
   btnRunSpeedtest.addEventListener("click", runSpeedtestNow);
 
   // ----------------- Initial loads -----------------
 
-  refreshProbeData();
-  refreshSpeedtestHistory();
-  refreshSpeedtestSummaryOnce();
-  showConfig();
+  // First, load config so DNS labels are available,
+  // then kick off data refreshes.
+  showConfig()
+    .catch(() => {
+      // ignore errors here; UI will still function
+    })
+    .finally(() => {
+      refreshProbeData();
+      refreshSpeedtestHistory();
+      refreshSpeedtestSummaryOnce();
+    });
 
   setInterval(
     () => {
