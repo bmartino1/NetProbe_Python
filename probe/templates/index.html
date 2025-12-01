@@ -175,6 +175,7 @@
             <span id="lastProbe" class="badge">Last probe: …</span>
             <span id="nextProbe" class="badge">Next probe in: …</span>
             <span class="badge">TZ: {{ app_timezone }}</span>
+            <span id="dbBackend" class="badge">DB: …</span>
           </div>
         </div>
         <div class="status-row">
@@ -265,32 +266,78 @@
                 data-range-for="score"
                 id="rangeScore"
               >
+                <!-- unified master range list -->
                 <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cScoreHistory"></canvas>
           <div class="metric-details">
-            Composite score from 0–100 based on packet loss, latency, jitter,
-            and DNS response time.
+            <strong>Internet Quality Score</strong><br />
+            The Internet Quality Score is a metric designed to provide you an
+            idea of your internet quality at any given time. The metric ranges
+            from 0 to 100, and is comprised of four metrics (with current
+            weights):
+            <br /><br />
+            <ul>
+              <li>
+                Packet loss
+                ({{ (weight_loss * 100) | round(1) }}%)
+              </li>
+              <li>
+                Latency
+                ({{ (weight_latency * 100) | round(1) }}%)
+              </li>
+              <li>
+                Jitter
+                ({{ (weight_jitter * 100) | round(1) }}%)
+              </li>
+              <li>
+                DNS Response Times
+                ({{ (weight_dns_latency * 100) | round(1) }}%)
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -312,31 +359,65 @@
                 data-range-for="loss"
                 id="rangeLoss"
               >
+                <!-- same master range list -->
                 <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cLossHistory"></canvas>
           <div class="metric-details">
-            Percentage of ICMP packets that never reach their destination.
+            <strong>Packet Loss</strong><br />
+            The percentage of packets (messages) that are lost when being
+            transmitted over your internet connection. Packet loss should be 0%
+            consistently with occasional spikes during peak internet use.
+            <br /><br />
+            Persistent packet loss could indicate:
+            <ul>
+              <li>Faulty internal hardware (including cabling or modem)</li>
+              <li>Faulty ISP hardware</li>
+              <li>ISP capacity problems</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -358,31 +439,66 @@
                 data-range-for="latency"
                 id="rangeLatency"
               >
+                <!-- same master range list -->
                 <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cLatencyHistory"></canvas>
           <div class="metric-details">
-            Round-trip time to your router / gateway and public sites.
+            <strong>Latency to Anchors</strong><br />
+            The time it takes to get packets to and from various well-known
+            websites. Higher latency means slower performance, even on a high
+            speed connection.
+            <br /><br />
+            If your latency is consistently high, there could be several causes
+            including:
+            <ul>
+              <li>Faulty internal hardware (including cabling or modem)</li>
+              <li>Faulty ISP hardware</li>
+              <li>ISP routing issues</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -404,31 +520,65 @@
                 data-range-for="jitter"
                 id="rangeJitter"
               >
+                <!-- same master range list -->
                 <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cJitterHistory"></canvas>
           <div class="metric-details">
-            Variation in latency over time.
+            <strong>Jitter</strong><br />
+            Jitter measures how frequently your latency is changing. High jitter
+            in the red zone can have a negative impact on real-time streaming
+            applications, such as gaming and voice calls.
+            <br /><br />
+            Consistently high jitter could be caused by:
+            <ul>
+              <li>Faulty internal hardware (including cabling or modem)</li>
+              <li>Faulty ISP hardware</li>
+              <li>Overuse of current internet capacity (hitting the limit)</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -450,35 +600,70 @@
                 data-range-for="dns"
                 id="rangeDns"
               >
+                <!-- same master range list -->
                 <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cDnsHistory"></canvas>
 
-          <!-- NEW: per-DNS-server series controls -->
+          <!-- Per-DNS-server series controls -->
           <div id="dns-series-controls" class="dns-series-controls"></div>
 
           <div class="metric-details">
-            Time for DNS servers to resolve the test domain.
+            <strong>DNS Response Time</strong><br />
+            DNS is the protocol used to turn website names into IP addresses.
+            Almost every request to the internet starts with a DNS request, so
+            having fast DNS is vital. This graph compares the response time of
+            your currently configured DNS server against several popular public
+            DNS servers.
+            <br /><br />
+            Slow DNS response could be caused by:
+            <ul>
+              <li>Poor DNS server performance</li>
+              <li>High latency</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -500,31 +685,68 @@
                 data-range-for="speed"
                 id="rangeSpeed"
               >
-                <option value="5s">Last tests (~short)</option>
+                <!-- same master range list -->
+                <option value="5s">5 seconds</option>
                 <option value="10s">10 seconds</option>
                 <option value="15s">15 seconds</option>
                 <option value="30s" selected>30 seconds</option>
                 <option value="45s">45 seconds</option>
                 <option value="60s">60 seconds</option>
+
                 <option value="5m">5 minutes</option>
+                <option value="10min">10 minutes</option>
                 <option value="15m">15 minutes</option>
+                <option value="20min">20 minutes</option>
                 <option value="30m">30 minutes</option>
+                <option value="45min">45 minutes</option>
+
                 <option value="1h">1 hour</option>
                 <option value="3h">3 hours</option>
                 <option value="6h">6 hours</option>
+                <option value="9h">9 hours</option>
                 <option value="12h">12 hours</option>
                 <option value="24h">24 hours</option>
+
+                <option value="3d">3 days</option>
+                <option value="5d">5 days</option>
+
                 <option value="1w">1 week</option>
-                <option value="1m">1 month</option>
+                <option value="2w">2 weeks</option>
+                <option value="3w">3 weeks</option>
+
+                <option value="1mo">1 month</option>
+                <option value="2mo">2 months</option>
                 <option value="3mo">3 months</option>
+                <option value="4mo">4 months</option>
+                <option value="5mo">5 months</option>
                 <option value="6mo">6 months</option>
+                <option value="7mo">7 months</option>
+                <option value="8mo">8 months</option>
+                <option value="9mo">9 months</option>
+                <option value="10mo">10 months</option>
+                <option value="11mo">11 months</option>
+                <option value="12mo">12 months</option>
+
                 <option value="1y">1 year</option>
               </select>
             </div>
           </div>
           <canvas id="cSpeedHistory"></canvas>
           <div class="metric-details">
-            Periodic bandwidth test using speedtest.net, plus manual tests.
+            <strong>Internet Bandwidth</strong><br />
+            If you don't see any data you need to explicitly enable the test in
+            the <code>.env</code> file configuration.
+            <br /><br />
+            Bandwidth is the maximum amount of data that can travel across your
+            internet connection at a given time. It's measured in megabits per
+            second (Mbps), similar to how water flow is measured. Less bandwidth
+            than what you paid for can be caused by:
+            <ul>
+              <li>Other clients down-/uploading data</li>
+              <li>Faulty internal hardware (including cabling or modem)</li>
+              <li>Faulty ISP hardware</li>
+              <li>ISP capacity problems</li>
+            </ul>
           </div>
         </div>
       </div>
