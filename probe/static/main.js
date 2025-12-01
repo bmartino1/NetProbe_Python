@@ -26,7 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function rangeValueToLimit(value) {
     const secondsMap = {
+      "5s": 5,
+      "10s": 10,
+      "15s": 15,
       "30s": 30,
+      "45s": 45,
+      "60s": 60,
+      "5m": 5 * 60,
       "15m": 15 * 60,
       "1h": 60 * 60,
       "3h": 3 * 60 * 60,
@@ -304,6 +310,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Probe Settings ==");
     lines.push(`Probe interval: ${cfg.probe_interval}s`);
     lines.push(`Ping count per target: ${cfg.ping_count}`);
+    lines.push(`Timezone: ${cfg.app_timezone}`);
     lines.push("");
 
     lines.push("== Ping Targets ==");
