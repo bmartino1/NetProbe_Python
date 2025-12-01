@@ -45,11 +45,16 @@ SITES = [
 ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
 DNS_TEST_SITE = os.getenv("DNS_TEST_SITE", "google.com").strip()
 
-DNS_SERVERS = []
+DNS_SERVERS: list[str] = []
+DNS_SERVERS_DETAIL: list[dict] = []
 for i in range(1, 5):
+    name = os.getenv(f"DNS_NAMESERVER_{i}", "").strip()
     ip = os.getenv(f"DNS_NAMESERVER_{i}_IP", "").strip()
     if ip:
         DNS_SERVERS.append(ip)
+        DNS_SERVERS_DETAIL.append(
+            {"name": name or None, "ip": ip}
+        )
 
 WEIGHT_LOSS = float(os.getenv("WEIGHT_LOSS", "0.6"))
 WEIGHT_LATENCY = float(os.getenv("WEIGHT_LATENCY", "0.15"))
@@ -85,6 +90,8 @@ def ensure_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+
+    # Aggregate probe metrics
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS measurements (
@@ -98,6 +105,20 @@ def ensure_db():
         );
         """
     )
+
+    # Detailed DNS per-server values, one row per (ts, server_ip)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS dns_measurements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            server_ip TEXT NOT NULL,
+            latency_ms REAL
+        );
+        """
+    )
+
+    # Speedtest results
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS speedtests (
@@ -132,6 +153,24 @@ def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     conn.close()
 
 
+def insert_dns_measurements(ts, dns_map):
+    """dns_map: {ip: latency_ms} for this probe timestamp."""
+    if not dns_map:
+        return
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    for ip, lat in dns_map.items():
+        cur.execute(
+            """
+            INSERT INTO dns_measurements (ts, server_ip, latency_ms)
+            VALUES (?, ?, ?)
+            """,
+            (ts, ip, float(lat)),
+        )
+    conn.commit()
+    conn.close()
+
+
 def fetch_recent(limit=2880):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -149,6 +188,36 @@ def fetch_recent(limit=2880):
     conn.close()
     rows.reverse()
     return rows
+
+
+def fetch_dns_for_timestamps(ts_list):
+    """
+    Return mapping: ts -> {ip: latency_ms}
+    for the given timestamps.
+    """
+    if not ts_list:
+        return {}
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    placeholders = ",".join("?" for _ in ts_list)
+    cur.execute(
+        f"""
+        SELECT ts, server_ip, latency_ms
+        FROM dns_measurements
+        WHERE ts IN ({placeholders})
+        """,
+        ts_list,
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    out = {}
+    for ts, ip, lat in rows:
+        if ts not in out:
+            out[ts] = {}
+        out[ts][ip] = lat
+    return out
 
 
 def fetch_latest():
@@ -254,14 +323,11 @@ def run_ping(host, count):
     """
     Run ping and return:
       latency (avg ms), jitter (max-min), loss (%).
-
-    NOTE: we set timeout relative to count because ping -q only prints
-    a summary at the end. With -c 20 it takes ~20 seconds.
+    Timeout scales with count because ping -q only prints at the end.
     """
     out = ""
     err = ""
-    # Allow roughly 2 seconds per packet, minimum 5 seconds
-    timeout = max(5, count * 2)
+    timeout = max(5, count * 2)  # ~2 s per packet
 
     try:
         proc = subprocess.run(
@@ -300,13 +366,11 @@ def run_ping(host, count):
         )
 
         if rtt_line:
-            # "rtt min/avg/max/mdev = 11.123/12.345/13.123/0.567 ms"
             stats_part = rtt_line.split("=")[1].split()[0]
             rtt_stats = stats_part.split("/")
             rtt_min, rtt_avg, rtt_max = map(float, rtt_stats[:3])
             jitter = rtt_max - rtt_min
         else:
-            # No RTT line usually means 100 % loss
             rtt_avg = THRESHOLD_LATENCY * 2
             jitter = THRESHOLD_JITTER * 2
 
@@ -447,6 +511,7 @@ def probe_loop():
     while True:
         ts = int(time.time())
 
+        # ---------- Ping probes ----------
         ping_targets = []
         if gw:
             ping_targets.append(gw)
@@ -460,19 +525,25 @@ def probe_loop():
         jitters = [r["jitter"] for r in ping_results]
         losses = [r["loss"] for r in ping_results]
 
-        avg_latency = statistics.mean(latencies) if latencies else 0
-        avg_jitter = statistics.mean(jitters) if jitters else 0
-        avg_loss = statistics.mean(losses) if losses else 0
+        avg_latency = statistics.mean(latencies) if latencies else 0.0
+        avg_jitter = statistics.mean(jitters) if jitters else 0.0
+        avg_loss = statistics.mean(losses) if losses else 0.0
 
+        # ---------- DNS probes ----------
         dns_times = []
-        for server in DNS_SERVERS:
-            t = measure_dns_latency(DNS_TEST_SITE, server, count=3)
+        dns_per_server = {}
+        for server_ip in DNS_SERVERS:
+            t = measure_dns_latency(DNS_TEST_SITE, server_ip, count=3)
             if t is not None:
                 dns_times.append(t)
-        avg_dns = statistics.mean(dns_times) if dns_times else 0
+                dns_per_server[server_ip] = t
 
+        avg_dns = statistics.mean(dns_times) if dns_times else 0.0
+
+        # ---------- Score + persistence ----------
         score = compute_score(avg_loss, avg_latency, avg_jitter, avg_dns)
         insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score)
+        insert_dns_measurements(ts, dns_per_server)
 
         logger.info(
             "Probe ts=%s score=%.2f loss=%.2f%% latency=%.1fms jitter=%.1fms dns=%.1fms",
@@ -512,19 +583,27 @@ def api_recent():
         limit = int(request.args.get("limit", "2880"))
     except ValueError:
         limit = 2880
+
     rows = fetch_recent(limit)
-    data = [
-        {
-            "ts": r[0],
-            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+    ts_list = [r[0] for r in rows]
+    dns_detail_map = fetch_dns_for_timestamps(ts_list)
+
+    data = []
+    for r in rows:
+        ts = r[0]
+        item = {
+            "ts": ts,
+            "iso": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
             "avg_latency_ms": r[1],
             "avg_jitter_ms": r[2],
             "avg_loss_pct": r[3],
             "avg_dns_latency_ms": r[4],
             "score": r[5],
         }
-        for r in rows
-    ]
+        if ts in dns_detail_map:
+            item["dns_per_server"] = dns_detail_map[ts]
+        data.append(item)
+
     return jsonify(data=data)
 
 
@@ -533,15 +612,15 @@ def api_latest():
     row = fetch_latest()
     if not row:
         return jsonify(data=None)
-    r = row
+    ts = row[0]
     data = {
-        "ts": r[0],
-        "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
-        "avg_latency_ms": r[1],
-        "avg_jitter_ms": r[2],
-        "avg_loss_pct": r[3],
-        "avg_dns_latency_ms": r[4],
-        "score": r[5],
+        "ts": ts,
+        "iso": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
+        "avg_latency_ms": row[1],
+        "avg_jitter_ms": row[2],
+        "avg_loss_pct": row[3],
+        "avg_dns_latency_ms": row[4],
+        "score": row[5],
     }
     return jsonify(data=data)
 
@@ -558,6 +637,7 @@ def api_config():
         sites=SITES,
         dns_test_site=DNS_TEST_SITE,
         dns_servers=DNS_SERVERS,
+        dns_servers_detail=DNS_SERVERS_DETAIL,
         weight_loss=WEIGHT_LOSS,
         weight_latency=WEIGHT_LATENCY,
         weight_jitter=WEIGHT_JITTER,
@@ -630,7 +710,8 @@ def start_background_thread():
     t.start()
 
 
-# Start probe loop when imported (gunicorn)
+# Start probe loop when imported (gunicorn worker start)
+ensure_db()
 start_background_thread()
 
 
