@@ -260,7 +260,7 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
 
 ### Speedtest never runs
 
-Check that:
+- Check that:
 
 ```bash
 echo $SPEEDTEST_ENABLED
