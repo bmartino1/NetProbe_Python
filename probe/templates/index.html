@@ -146,6 +146,24 @@
         font-size: 0.85rem;
         line-height: 1.3;
       }
+
+      /* DNS multi-line controls */
+      .dns-series-controls {
+        margin-top: 6px;
+        font-size: 0.8rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .dns-series-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: #141414;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid #222;
+      }
     </style>
   </head>
   <body data-probe-interval="{{ probe_interval }}">
@@ -455,6 +473,10 @@
             </div>
           </div>
           <canvas id="cDnsHistory"></canvas>
+
+          <!-- NEW: per-DNS-server series controls -->
+          <div id="dns-series-controls" class="dns-series-controls"></div>
+
           <div class="metric-details">
             Time for DNS servers to resolve the test domain.
           </div>
