@@ -275,7 +275,7 @@ docker logs netprobe
 
 - You should see lines like:
   ```
-  You should see lines like:
+  Speedtest: ping=… down=… up=…
   ```
 
 - Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...)(
