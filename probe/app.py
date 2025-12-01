@@ -11,6 +11,11 @@ from flask import Flask, jsonify, render_template, request
 import dns.resolver
 import speedtest
 
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
 # -------------------------
 # Logging setup
 # -------------------------
@@ -28,44 +33,78 @@ if not logger.handlers:
 # -------------------------
 
 WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
-DB_PATH = os.getenv("DB_PATH", "/data/netprobe.sqlite")
+
+# Built-in defaults if the container is started with *no* env vars
+DEFAULT_DB_PATH = "/data/netprobe.sqlite"
+DEFAULT_DB_ENGINE = "sqlite"
+
+DB_PATH = os.getenv("DB_PATH", DEFAULT_DB_PATH)
+
+# Database backend: sqlite (file) or postgres
+DB_ENGINE = os.getenv("DB_ENGINE", "").strip().lower()
+_use_pg_flag = os.getenv("USE_POSTGRES", "").strip().lower()
+
+# Simple legacy flag: USE_POSTGRES=true forces postgres
+if _use_pg_flag in ("1", "true", "yes"):
+    DB_ENGINE = "postgres"
+
+# If DB_ENGINE is missing or weird, fall back to sqlite file backend
+if DB_ENGINE not in ("sqlite", "postgres"):
+    DB_ENGINE = DEFAULT_DB_ENGINE
+
+USING_POSTGRES = DB_ENGINE == "postgres"
 
 PROBE_INTERVAL = int(os.getenv("PROBE_INTERVAL", "30"))
-PING_COUNT = int(os.getenv("PING_COUNT", "20"))
+PING_COUNT = int(os.getenv("PING_COUNT", "4"))  # default you wanted
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
 
+# Default sites if SITES is not set
 SITES = [
     s.strip()
     for s in os.getenv(
-        "SITES", "fast.com,google.com,youtube.com,amazon.com"
+        "SITES", "fast.com,google.com,youtube.com"
     ).split(",")
     if s.strip()
 ]
 
+# Blank router IP by default
 ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
 DNS_TEST_SITE = os.getenv("DNS_TEST_SITE", "google.com").strip()
 
-DNS_SERVERS: list[str] = []
-DNS_SERVERS_DETAIL: list[dict] = []
+# Default DNS servers if none provided via env
+DEFAULT_DNS_SERVERS = {
+    1: ("Google_DNS", "8.8.8.8"),
+    2: ("Quad9_DNS", "9.9.9.9"),
+    3: ("CloudFlare_DNS", "1.1.1.1"),
+}
+
+DNS_SERVERS = []        # type: list[str]
+DNS_SERVERS_DETAIL = [] # type: list[dict]
 for i in range(1, 5):
-    name = os.getenv(f"DNS_NAMESERVER_{i}", "").strip()
-    ip = os.getenv(f"DNS_NAMESERVER_{i}_IP", "").strip()
+    def_name, def_ip = DEFAULT_DNS_SERVERS.get(i, ("", ""))
+    name = os.getenv(f"DNS_NAMESERVER_{i}", def_name).strip()
+    ip = os.getenv(f"DNS_NAMESERVER_{i}_IP", def_ip).strip()
     if ip:
         DNS_SERVERS.append(ip)
-        DNS_SERVERS_DETAIL.append(
-            {"name": name or None, "ip": ip}
-        )
+        DNS_SERVERS_DETAIL.append({"name": name or None, "ip": ip})
 
+# -------------------------------
+# Internet Quality Score Weights
+# -------------------------------
 WEIGHT_LOSS = float(os.getenv("WEIGHT_LOSS", "0.6"))
 WEIGHT_LATENCY = float(os.getenv("WEIGHT_LATENCY", "0.15"))
 WEIGHT_JITTER = float(os.getenv("WEIGHT_JITTER", "0.2"))
 WEIGHT_DNS_LATENCY = float(os.getenv("WEIGHT_DNS_LATENCY", "0.05"))
 
+# -------------------------------
+# Internet Quality Score Thresholds
+# -------------------------------
 THRESHOLD_LOSS = float(os.getenv("THRESHOLD_LOSS", "5"))
 THRESHOLD_LATENCY = float(os.getenv("THRESHOLD_LATENCY", "100"))
 THRESHOLD_JITTER = float(os.getenv("THRESHOLD_JITTER", "30"))
 THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 
+# Speedtest
 SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "True").lower() == "true"
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 
@@ -74,6 +113,7 @@ logger.info(
     PROBE_INTERVAL,
     PING_COUNT,
 )
+logger.info("Database backend: %s (DB_PATH=%s)", DB_ENGINE, DB_PATH)
 logger.info(
     "Targets: gateway(auto), router=%s, sites=%s, dns_servers=%s",
     ROUTER_IP or "(none)",
@@ -82,20 +122,86 @@ logger.info(
 )
 
 # -------------------------
-# SQLite helpers
+# Database helpers
 # -------------------------
 
 
+class _WrappedPostgresCursor:
+    def __init__(self, inner):
+        self._inner = inner
+
+    def execute(self, query, params=None):
+        if params is None:
+            params = ()
+        # Translate SQLite-style "?" placeholders to psycopg2's "%s".
+        # Our SQL never has literal "?" in strings, so this is safe.
+        query = query.replace("?", "%s")
+        return self._inner.execute(query, params)
+
+    def fetchone(self):
+        return self._inner.fetchone()
+
+    def fetchall(self):
+        return self._inner.fetchall()
+
+    def __iter__(self):
+        return iter(self._inner)
+
+
+class _WrappedPostgresConnection:
+    def __init__(self, inner):
+        self._inner = inner
+
+    def cursor(self):
+        return _WrappedPostgresCursor(self._inner.cursor())
+
+    def commit(self):
+        return self._inner.commit()
+
+    def close(self):
+        return self._inner.close()
+
+
+def get_db_connection():
+    """
+    Return DB-API compatible connection to SQLite or Postgres.
+
+    - SQLite uses DB_PATH on the local volume.
+    - Postgres uses POSTGRES_* environment variables.
+    """
+    if USING_POSTGRES:
+        if psycopg2 is None:
+            raise RuntimeError(
+                "psycopg2 is required for Postgres backend (DB_ENGINE=postgres)"
+            )
+        conn = psycopg2.connect(
+            host=os.getenv("POSTGRES_HOST", "postgres"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
+            dbname=os.getenv("POSTGRES_DB", "netprobe"),
+            user=os.getenv("POSTGRES_USER", "netprobe"),
+            password=os.getenv("POSTGRES_PASSWORD", "netprobe"),
+        )
+        return _WrappedPostgresConnection(conn)
+    else:
+        # SQLite file on a local Docker volume
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        return sqlite3.connect(DB_PATH)
+
+
 def ensure_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
+
+    if USING_POSTGRES:
+        id_col = "id SERIAL PRIMARY KEY"
+    else:
+        id_col = "id INTEGER PRIMARY KEY AUTOINCREMENT"
 
     # Aggregate probe metrics
     cur.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS measurements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            {id_col},
             ts INTEGER NOT NULL,
             avg_latency_ms REAL,
             avg_jitter_ms REAL,
@@ -108,9 +214,9 @@ def ensure_db():
 
     # Detailed DNS per-server values, one row per (ts, server_ip)
     cur.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS dns_measurements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            {id_col},
             ts INTEGER NOT NULL,
             server_ip TEXT NOT NULL,
             latency_ms REAL
@@ -120,9 +226,9 @@ def ensure_db():
 
     # Speedtest results
     cur.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS speedtests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            {id_col},
             ts INTEGER NOT NULL,
             ping_ms REAL,
             download_mbps REAL,
@@ -133,12 +239,13 @@ def ensure_db():
         );
         """
     )
+
     conn.commit()
     conn.close()
 
 
 def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -157,7 +264,7 @@ def insert_dns_measurements(ts, dns_map):
     """dns_map: {ip: latency_ms} for this probe timestamp."""
     if not dns_map:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     for ip, lat in dns_map.items():
         cur.execute(
@@ -172,7 +279,7 @@ def insert_dns_measurements(ts, dns_map):
 
 
 def fetch_recent(limit=2880):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -198,7 +305,7 @@ def fetch_dns_for_timestamps(ts_list):
     if not ts_list:
         return {}
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     placeholders = ",".join("?" for _ in ts_list)
     cur.execute(
@@ -221,7 +328,7 @@ def fetch_dns_for_timestamps(ts_list):
 
 
 def fetch_latest():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -238,7 +345,7 @@ def fetch_latest():
 
 
 def insert_speedtest(ts, ping_ms, download_mbps, upload_mbps, server):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -262,7 +369,7 @@ def insert_speedtest(ts, ping_ms, download_mbps, upload_mbps, server):
 
 
 def fetch_speedtests(limit=100):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -281,7 +388,7 @@ def fetch_speedtests(limit=100):
 
 
 def fetch_latest_speedtest():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
@@ -505,7 +612,6 @@ def run_speedtest_if_due():
 
 
 def probe_loop():
-    ensure_db()
     gw = get_default_gateway()
 
     while True:
@@ -574,6 +680,10 @@ def index():
         "index.html",
         probe_interval=PROBE_INTERVAL,
         app_timezone=APP_TIMEZONE,
+        weight_loss=WEIGHT_LOSS,
+        weight_latency=WEIGHT_LATENCY,
+        weight_jitter=WEIGHT_JITTER,
+        weight_dns_latency=WEIGHT_DNS_LATENCY,
     )
 
 
@@ -648,6 +758,7 @@ def api_config():
         threshold_dns_latency=THRESHOLD_DNS_LATENCY,
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
+        db_engine=DB_ENGINE,
     )
 
 
