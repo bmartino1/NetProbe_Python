@@ -4,6 +4,7 @@ import threading
 import sqlite3
 import subprocess
 import statistics
+import logging
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, render_template, request
@@ -11,15 +12,27 @@ import dns.resolver
 import speedtest
 
 # -------------------------
+# Logging setup
+# -------------------------
+
+logger = logging.getLogger("netprobe")
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
+    logger.setLevel(logging.INFO)
+
+# -------------------------
 # Config from environment
 # -------------------------
 
 WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
-
 DB_PATH = os.getenv("DB_PATH", "/data/netprobe.sqlite")
 
 PROBE_INTERVAL = int(os.getenv("PROBE_INTERVAL", "30"))
 PING_COUNT = int(os.getenv("PING_COUNT", "20"))
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
 
 SITES = [
     s.strip()
@@ -30,7 +43,6 @@ SITES = [
 ]
 
 ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
-
 DNS_TEST_SITE = os.getenv("DNS_TEST_SITE", "google.com").strip()
 
 DNS_SERVERS = []
@@ -52,6 +64,18 @@ THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "True").lower() == "true"
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 
+logger.info(
+    "Netprobe 2.0 starting with PROBE_INTERVAL=%ss, PING_COUNT=%s",
+    PROBE_INTERVAL,
+    PING_COUNT,
+)
+logger.info(
+    "Targets: gateway(auto), router=%s, sites=%s, dns_servers=%s",
+    ROUTER_IP or "(none)",
+    ", ".join(SITES),
+    ", ".join(DNS_SERVERS),
+)
+
 # -------------------------
 # SQLite helpers
 # -------------------------
@@ -71,6 +95,20 @@ def ensure_db():
             avg_loss_pct REAL,
             avg_dns_latency_ms REAL,
             score REAL
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS speedtests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            ping_ms REAL,
+            download_mbps REAL,
+            upload_mbps REAL,
+            server_name TEXT,
+            server_host TEXT,
+            server_country TEXT
         );
         """
     )
@@ -109,7 +147,7 @@ def fetch_recent(limit=2880):
     )
     rows = cur.fetchall()
     conn.close()
-    rows.reverse()  # chronological
+    rows.reverse()
     return rows
 
 
@@ -121,6 +159,66 @@ def fetch_latest():
         SELECT ts, avg_latency_ms, avg_jitter_ms,
                avg_loss_pct, avg_dns_latency_ms, score
         FROM measurements
+        ORDER BY ts DESC
+        LIMIT 1
+        """
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def insert_speedtest(ts, ping_ms, download_mbps, upload_mbps, server):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO speedtests
+        (ts, ping_ms, download_mbps, upload_mbps,
+         server_name, server_host, server_country)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ts,
+            ping_ms,
+            download_mbps,
+            upload_mbps,
+            server.get("name") if server else None,
+            server.get("host") if server else None,
+            server.get("country") if server else None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_speedtests(limit=100):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ts, ping_ms, download_mbps, upload_mbps,
+               server_name, server_host, server_country
+        FROM speedtests
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    rows.reverse()
+    return rows
+
+
+def fetch_latest_speedtest():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ts, ping_ms, download_mbps, upload_mbps,
+               server_name, server_host, server_country
+        FROM speedtests
         ORDER BY ts DESC
         LIMIT 1
         """
@@ -142,8 +240,13 @@ def get_default_gateway():
             ["sh", "-c", "ip route | awk '/default/ {print $3; exit}'"],
             text=True,
         ).strip()
+        if out:
+            logger.info("Detected default gateway inside container: %s", out)
+        else:
+            logger.warning("No default gateway detected via ip route")
         return out or None
-    except Exception:
+    except Exception as e:
+        logger.error("Failed to get default gateway: %s", e)
         return None
 
 
@@ -151,34 +254,79 @@ def run_ping(host, count):
     """
     Run ping and return:
       latency (avg ms), jitter (max-min), loss (%).
-    On failure, treat as 100% loss and huge latency/jitter.
+
+    NOTE: we set timeout relative to count because ping -q only prints
+    a summary at the end. With -c 20 it takes ~20 seconds.
     """
+    out = ""
+    err = ""
+    # Allow roughly 2 seconds per packet, minimum 5 seconds
+    timeout = max(5, count * 2)
+
     try:
         proc = subprocess.run(
             ["ping", "-q", "-c", str(count), host],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=timeout,
+            check=False,
         )
-        out = proc.stdout
-        if not out:
-            raise RuntimeError("no ping output")
+        out = proc.stdout or ""
+        err = proc.stderr or ""
+
+        if proc.returncode != 0:
+            logger.warning(
+                "ping to %s exited with code %s, stderr=%r",
+                host,
+                proc.returncode,
+                err.strip(),
+            )
+
+        if not out.strip():
+            raise RuntimeError("no ping stdout")
 
         lines = out.splitlines()
-        loss_line = next(l for l in lines if "packet loss" in l)
-        rtt_line = next(l for l in lines if "min/avg/max" in l)
+        loss_line = next((l for l in lines if "packet loss" in l), None)
+        if not loss_line:
+            raise RuntimeError("no packet loss line in ping output")
 
-        # "5 packets transmitted, 5 received, 0% packet loss, time 4004ms"
+        # e.g. "5 packets transmitted, 5 received, 0% packet loss, time 4004ms"
         loss_str = loss_line.split("%")[0].split()[-1]
         loss = float(loss_str)
 
-        # "rtt min/avg/max/mdev = 11.123/12.345/13.123/0.567 ms"
-        rtt_stats = rtt_line.split("=")[1].split()[0].split("/")
-        rtt_min, rtt_avg, rtt_max, _ = map(float, rtt_stats)
-        jitter = rtt_max - rtt_min
+        rtt_line = next(
+            (l for l in lines if "min/avg/max" in l or "min/mean/max" in l),
+            None,
+        )
 
+        if rtt_line:
+            # "rtt min/avg/max/mdev = 11.123/12.345/13.123/0.567 ms"
+            stats_part = rtt_line.split("=")[1].split()[0]
+            rtt_stats = stats_part.split("/")
+            rtt_min, rtt_avg, rtt_max = map(float, rtt_stats[:3])
+            jitter = rtt_max - rtt_min
+        else:
+            # No RTT line usually means 100 % loss
+            rtt_avg = THRESHOLD_LATENCY * 2
+            jitter = THRESHOLD_JITTER * 2
+
+        logger.info(
+            "ping %s -> loss=%.1f%% avg=%.1fms jitter=%.1fms",
+            host,
+            loss,
+            rtt_avg,
+            jitter,
+        )
         return {"host": host, "latency": rtt_avg, "jitter": jitter, "loss": loss}
-    except Exception:
+
+    except Exception as e:
+        logger.error(
+            "ping to %s failed: %s; stdout=%r stderr=%r",
+            host,
+            e,
+            out,
+            err,
+        )
         return {
             "host": host,
             "latency": THRESHOLD_LATENCY * 2,
@@ -240,11 +388,45 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
 
 last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
-latest_speedtest = None  # for future API
+
+
+def run_speedtest_internal():
+    logger.info("Starting speedtest run…")
+    st = speedtest.Speedtest()
+    st.get_best_server()
+    down_bps = st.download()
+    up_bps = st.upload()
+    res = st.results.dict()
+    ping_ms = res.get("ping")
+    download_mbps = down_bps / (1024 * 1024)
+    upload_mbps = up_bps / (1024 * 1024)
+    server = res.get("server", {}) or {}
+    ts = int(time.time())
+    insert_speedtest(
+        ts,
+        ping_ms,
+        download_mbps,
+        upload_mbps,
+        server,
+    )
+    logger.info(
+        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s",
+        ping_ms,
+        download_mbps,
+        upload_mbps,
+        server.get("name"),
+    )
+    return {
+        "timestamp": ts,
+        "ping_ms": ping_ms,
+        "download_mbps": download_mbps,
+        "upload_mbps": upload_mbps,
+        "server": server,
+    }
 
 
 def run_speedtest_if_due():
-    global last_speedtest_ts, latest_speedtest
+    global last_speedtest_ts
     if not SPEEDTEST_ENABLED:
         return
     now = time.time()
@@ -253,19 +435,9 @@ def run_speedtest_if_due():
             return
         last_speedtest_ts = now
     try:
-        st = speedtest.Speedtest()
-        st.get_best_server()
-        down = st.download()
-        up = st.upload()
-        res = st.results.dict()
-        latest_speedtest = {
-            "ping_ms": res.get("ping"),
-            "download_mbps": down / (1024 * 1024),
-            "upload_mbps": up / (1024 * 1024),
-            "server": res.get("server", {}),
-        }
-    except Exception:
-        pass
+        run_speedtest_internal()
+    except Exception as e:
+        logger.error("Periodic speedtest failed: %s", e)
 
 
 def probe_loop():
@@ -302,6 +474,16 @@ def probe_loop():
         score = compute_score(avg_loss, avg_latency, avg_jitter, avg_dns)
         insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score)
 
+        logger.info(
+            "Probe ts=%s score=%.2f loss=%.2f%% latency=%.1fms jitter=%.1fms dns=%.1fms",
+            ts,
+            score,
+            avg_loss,
+            avg_latency,
+            avg_jitter,
+            avg_dns,
+        )
+
         if SPEEDTEST_ENABLED:
             threading.Thread(target=run_speedtest_if_due, daemon=True).start()
 
@@ -317,7 +499,11 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        probe_interval=PROBE_INTERVAL,
+        app_timezone=APP_TIMEZONE,
+    )
 
 
 @app.route("/api/score/recent")
@@ -350,7 +536,7 @@ def api_latest():
     r = row
     data = {
         "ts": r[0],
-            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+        "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
         "avg_latency_ms": r[1],
         "avg_jitter_ms": r[2],
         "avg_loss_pct": r[3],
@@ -360,10 +546,96 @@ def api_latest():
     return jsonify(data=data)
 
 
-def main():
-    ensure_db()
+@app.route("/api/config")
+def api_config():
+    gw = get_default_gateway()
+    return jsonify(
+        probe_interval=PROBE_INTERVAL,
+        ping_count=PING_COUNT,
+        app_timezone=APP_TIMEZONE,
+        gateway_ip=gw,
+        router_ip=ROUTER_IP or None,
+        sites=SITES,
+        dns_test_site=DNS_TEST_SITE,
+        dns_servers=DNS_SERVERS,
+        weight_loss=WEIGHT_LOSS,
+        weight_latency=WEIGHT_LATENCY,
+        weight_jitter=WEIGHT_JITTER,
+        weight_dns_latency=WEIGHT_DNS_LATENCY,
+        threshold_loss=THRESHOLD_LOSS,
+        threshold_latency=THRESHOLD_LATENCY,
+        threshold_jitter=THRESHOLD_JITTER,
+        threshold_dns_latency=THRESHOLD_DNS_LATENCY,
+        speedtest_enabled=SPEEDTEST_ENABLED,
+        speedtest_interval=SPEEDTEST_INTERVAL,
+    )
+
+
+@app.route("/api/speedtest/history")
+def api_speedtest_history():
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        limit = 100
+    rows = fetch_speedtests(limit)
+    tests = [
+        {
+            "ts": r[0],
+            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+            "ping_ms": r[1],
+            "download_mbps": r[2],
+            "upload_mbps": r[3],
+            "server_name": r[4],
+            "server_host": r[5],
+            "server_country": r[6],
+        }
+        for r in rows
+    ]
+    return jsonify(tests=tests)
+
+
+@app.route("/api/speedtest/latest")
+def api_speedtest_latest():
+    row = fetch_latest_speedtest()
+    if not row:
+        return jsonify(result=None)
+    r = row
+    data = {
+        "ts": r[0],
+        "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
+        "ping_ms": r[1],
+        "download_mbps": r[2],
+        "upload_mbps": r[3],
+        "server": {
+            "name": r[4],
+            "host": r[5],
+            "country": r[6],
+        },
+    }
+    return jsonify(result=data)
+
+
+@app.route("/api/speedtest/run", methods=["POST"])
+def api_speedtest_run():
+    try:
+        result = run_speedtest_internal()
+        return jsonify(success=True, result=result)
+    except Exception as e:
+        logger.error("Manual speedtest failed: %s", e)
+        return jsonify(success=False, error=str(e)), 500
+
+
+def start_background_thread():
     t = threading.Thread(target=probe_loop, daemon=True)
     t.start()
+
+
+# Start probe loop when imported (gunicorn)
+start_background_thread()
+
+
+def main():
+    # For local dev only
     app.run(host="0.0.0.0", port=WEB_PORT)
 
 
