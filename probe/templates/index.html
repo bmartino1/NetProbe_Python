@@ -164,6 +164,48 @@
         border-radius: 999px;
         border: 1px solid #222;
       }
+      .inline-control-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .input-control {
+        font-size: 0.85rem;
+        background: #141414;
+        color: #eee;
+        border-radius: 6px;
+        border: 1px solid #333;
+        padding: 6px 10px;
+        min-width: 180px;
+      }
+      .log-panel {
+        background: #141414;
+        border-radius: 8px;
+        padding: 8px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .log-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-size: 0.85rem;
+      }
+      .live-log-output {
+        font-size: 0.82rem;
+        line-height: 1.35;
+        background: #0f0f0f;
+        border-radius: 6px;
+        padding: 10px;
+        min-height: 140px;
+        max-height: 320px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
     </style>
   </head>
   <body data-probe-interval="{{ probe_interval }}">
@@ -179,12 +221,22 @@
           </div>
         </div>
         <div class="status-row">
-          <div class="status-buttons">
+          <div class="status-buttons inline-control-row">
             <button class="btn secondary" id="btnShowConfig">
               Show Config / Env
             </button>
+            <input
+              class="input-control"
+              id="speedtestServerInput"
+              type="text"
+              inputmode="numeric"
+              placeholder="Speedtest server ID (auto)"
+            />
             <button class="btn" id="btnRunSpeedtest">
               Run Speedtest Now
+            </button>
+            <button class="btn secondary" id="btnToggleLogs">
+              Follow Live Logs
             </button>
           </div>
           <div class="status-info" id="speedtestSummary">
@@ -246,6 +298,19 @@
 
         <div class="general-output" id="generalOutput">
           Ready.
+        </div>
+
+        <div class="log-panel" id="logPanel">
+          <div class="log-toolbar">
+            <span class="badge" id="logStatus">Live logs: paused</span>
+            <label>
+              <input type="checkbox" id="followLogsCheckbox" checked />
+              auto-follow
+            </label>
+            <button class="btn secondary" id="btnRefreshLogs">Refresh Logs</button>
+            <button class="btn secondary" id="btnClearLogs">Clear Viewer</button>
+          </div>
+          <div class="live-log-output" id="liveLogOutput">Log viewer ready.</div>
         </div>
       </div>
 
