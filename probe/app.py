@@ -106,7 +106,6 @@ def parse_bool_env(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
-
 def parse_csv_env(name, default=""):
     """
     Parse a comma-separated environment variable into a clean list.
@@ -209,11 +208,15 @@ SPEEDTEST_ENABLED = parse_bool_env("SPEEDTEST_ENABLED", default=True)
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 
 # Optional preferred speedtest server.
-# Accept a numeric server ID as used by speedtest-cli / speedtest.net.
+# Empty / unset means automatic server selection.
 SPEEDTEST_SERVER = os.getenv("SPEEDTEST_SERVER", "").strip()
 
 # Browser log-tail polling interval. This only affects the UI refresh cadence.
-LIVE_LOG_POLL_SECONDS = int(os.getenv("LIVE_LOG_POLL_SECONDS", "2"))
+# Invalid or missing values fall back to 2 seconds.
+try:
+    LIVE_LOG_POLL_SECONDS = max(1, int(os.getenv("LIVE_LOG_POLL_SECONDS", "2")))
+except (TypeError, ValueError):
+    LIVE_LOG_POLL_SECONDS = 2
 
 logger.info(
     "Netprobe 2.0 starting with PROBE_INTERVAL=%ss, PING_COUNT=%s",
@@ -230,6 +233,9 @@ logger.info(
 )
 if SPEEDTEST_SERVER:
     logger.info("Preferred speedtest server ID: %s", SPEEDTEST_SERVER)
+else:
+    logger.info("Preferred speedtest server ID: auto")
+logger.info("Live log poll interval: %ss", LIVE_LOG_POLL_SECONDS)
 
 
 # -------------------------
@@ -273,7 +279,6 @@ class _WrappedPostgresConnection:
         return self._inner.close()
 
 
-
 def get_db_connection():
     """
     Return a DB-API-compatible connection to SQLite or Postgres.
@@ -294,7 +299,6 @@ def get_db_connection():
 
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     return sqlite3.connect(DB_PATH)
-
 
 
 def ensure_db():
@@ -357,7 +361,6 @@ def ensure_db():
     conn.close()
 
 
-
 def ensure_speedtests_schema():
     """
     Small schema migration for older installs.
@@ -398,7 +401,6 @@ def ensure_speedtests_schema():
         conn.close()
 
 
-
 def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -413,7 +415,6 @@ def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     )
     conn.commit()
     conn.close()
-
 
 
 def insert_dns_measurements(ts, dns_map):
@@ -434,7 +435,6 @@ def insert_dns_measurements(ts, dns_map):
     conn.close()
 
 
-
 def fetch_recent(limit=2880):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -452,7 +452,6 @@ def fetch_recent(limit=2880):
     conn.close()
     rows.reverse()
     return rows
-
 
 
 def fetch_dns_for_timestamps(ts_list):
@@ -482,7 +481,6 @@ def fetch_dns_for_timestamps(ts_list):
     return out
 
 
-
 def fetch_latest():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -498,7 +496,6 @@ def fetch_latest():
     row = cur.fetchone()
     conn.close()
     return row
-
 
 
 def insert_speedtest(
@@ -534,7 +531,6 @@ def insert_speedtest(
     conn.close()
 
 
-
 def fetch_speedtests(limit=100):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -553,7 +549,6 @@ def fetch_speedtests(limit=100):
     conn.close()
     rows.reverse()
     return rows
-
 
 
 def fetch_latest_speedtest():
@@ -579,7 +574,6 @@ def fetch_latest_speedtest():
 # -------------------------
 
 
-
 def get_default_gateway():
     """Return the default gateway IP inside the container, or None."""
     try:
@@ -595,7 +589,6 @@ def get_default_gateway():
     except Exception as exc:
         logger.error("Failed to get default gateway: %s", exc)
         return None
-
 
 
 def run_ping(host, count):
@@ -679,7 +672,6 @@ def run_ping(host, count):
         }
 
 
-
 def measure_dns_latency(domain, server, count):
     resolver = dns.resolver.Resolver(configure=False)
     resolver.nameservers = [server]
@@ -699,7 +691,6 @@ def measure_dns_latency(domain, server, count):
     return sum(times) / len(times)
 
 
-
 def measure_dns_latency_multi(domains, server, count):
     """
     Measure a DNS server against multiple domains and return a single average.
@@ -716,7 +707,6 @@ def measure_dns_latency_multi(domains, server, count):
     if not times:
         return None
     return sum(times) / len(times)
-
 
 
 def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
@@ -743,7 +733,6 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
     return raw * 100.0
 
 
-
 def parse_speedtest_server_id(raw_value):
     """
     Normalize an optional speedtest server ID.
@@ -767,7 +756,6 @@ def parse_speedtest_server_id(raw_value):
 
 last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
-
 
 
 def run_speedtest_internal(requested_server_id=None):
@@ -831,7 +819,6 @@ def run_speedtest_internal(requested_server_id=None):
     }
 
 
-
 def run_speedtest_if_due():
     global last_speedtest_ts
     if not SPEEDTEST_ENABLED:
@@ -847,7 +834,6 @@ def run_speedtest_if_due():
         run_speedtest_internal()
     except Exception as exc:
         logger.error("Periodic speedtest failed: %s", exc)
-
 
 
 def probe_loop():
@@ -1070,7 +1056,6 @@ def api_speedtest_run():
         return jsonify(success=False, error=str(exc)), 500
 
 
-
 @app.route("/api/logs/live")
 def api_logs_live():
     """
@@ -1085,7 +1070,6 @@ def api_logs_live():
     return jsonify(get_live_logs(since_seq=since, limit=limit))
 
 
-
 def start_background_thread():
     thread = threading.Thread(target=probe_loop, daemon=True)
     thread.start()
@@ -1095,7 +1079,6 @@ def start_background_thread():
 ensure_db()
 ensure_speedtests_schema()
 start_background_thread()
-
 
 
 def main():
