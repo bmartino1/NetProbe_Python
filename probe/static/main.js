@@ -1,9 +1,11 @@
 // static/main.js
-
-// Netprobe frontend updates in this revision:
-// 1. Show fuller date + time labels on charts so month/day context is visible.
-// 2. Display multi-domain DNS test targets from DNS_TEST_SITES.
-// 3. Surface configured speedtest server details from SPEEDTEST_SERVER.
+//
+// Frontend responsibilities in this revision:
+// 1. Preserve the existing probe, DNS, and speedtest history dashboards.
+// 2. Show fuller date + time labels so month/day context is visible.
+// 3. Support multi-domain DNS targets from DNS_TEST_SITES.
+// 4. Let the user optionally override the speedtest server ID in the web UI.
+// 5. Provide a browser-based live log tail for probe/speedtest activity.
 
 document.addEventListener("DOMContentLoaded", () => {
   const rawProbeInterval = parseInt(
@@ -21,17 +23,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const btnShowConfig = document.getElementById("btnShowConfig");
   const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
+  const btnToggleLogs = document.getElementById("btnToggleLogs");
+  const btnRefreshLogs = document.getElementById("btnRefreshLogs");
+  const btnClearLogs = document.getElementById("btnClearLogs");
+
+  const speedtestServerInput = document.getElementById("speedtestServerInput");
+  const logPanel = document.getElementById("logPanel");
+  const logStatus = document.getElementById("logStatus");
+  const liveLogOutput = document.getElementById("liveLogOutput");
+  const followLogsCheckbox = document.getElementById("followLogsCheckbox");
+
   const rangeSelects = document.querySelectorAll(".range-select");
   const panelToggles = document.querySelectorAll(".panel-toggle");
   const dnsSeriesControls = document.getElementById("dns-series-controls");
 
   let lastTimestamp = null;
   let currentLimit = 0;
+  let configCache = null;
 
   // DNS per-server label + dataset bookkeeping.
-  let dnsServerLabels = {}; // ip -> label for checkboxes/legend
-  let dnsServerOrder = []; // ordered array of IPs in chart order
+  let dnsServerLabels = {};
+  let dnsServerOrder = [];
   let dnsDatasetsInitialized = false;
+
+  // Live log polling state.
+  let logViewerOpen = false;
+  let logNextSeq = 0;
+  let liveLogPollMs = 2000;
+  let logPollHandle = null;
 
   // ----------------- Range -> limit helper -----------------
 
@@ -82,17 +101,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function initCurrentLimit() {
-    currentLimit = rangeSelects.length === 0 ? 2880 : rangeValueToLimit(rangeSelects[0].value);
+    currentLimit =
+      rangeSelects.length === 0 ? 2880 : rangeValueToLimit(rangeSelects[0].value);
   }
 
   initCurrentLimit();
 
   // ----------------- Time label helpers -----------------
 
-  function formatTickLabelFromTs(tsSeconds, index, totalCount) {
+  function formatTickLabelFromTs(tsSeconds, totalCount) {
     const date = new Date(tsSeconds * 1000);
 
-    // For short windows, keep the label compact.
     if (totalCount <= 48) {
       return date.toLocaleString([], {
         month: "short",
@@ -102,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // For larger windows, alternate between slightly denser labels.
     return date.toLocaleString([], {
       month: "short",
       day: "numeric",
@@ -111,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function buildTimeLabels(rows) {
-    return rows.map((row, index) => formatTickLabelFromTs(row.ts, index, rows.length));
+    return rows.map((row) => formatTickLabelFromTs(row.ts, rows.length));
   }
 
   function formatFullTimestamp(tsSeconds) {
@@ -352,7 +370,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     cDnsHistory.data.labels = labels;
 
-    const firstRowWithDns = data.find((row) => row.dns_per_server && Object.keys(row.dns_per_server).length);
+    const firstRowWithDns = data.find(
+      (row) => row.dns_per_server && Object.keys(row.dns_per_server).length
+    );
+
     if (firstRowWithDns && firstRowWithDns.dns_per_server) {
       const servers = Object.keys(firstRowWithDns.dns_per_server);
       ensureDnsDatasets(servers);
@@ -390,11 +411,20 @@ document.addEventListener("DOMContentLoaded", () => {
     generalOutput.textContent = "Loading config / env...";
     const res = await fetch("/api/config");
     const cfg = await res.json();
+    configCache = cfg;
 
     if (dbBackendEl && cfg.db_engine) {
       dbBackendEl.textContent = `DB: ${cfg.db_engine}`;
     } else if (dbBackendEl) {
       dbBackendEl.textContent = "DB: sqlite";
+    }
+
+    if (typeof cfg.live_log_poll_seconds === "number" && cfg.live_log_poll_seconds > 0) {
+      liveLogPollMs = cfg.live_log_poll_seconds * 1000;
+    }
+
+    if (speedtestServerInput && !speedtestServerInput.dataset.userEdited) {
+      speedtestServerInput.value = cfg.speedtest_server || "";
     }
 
     const lines = [];
@@ -464,12 +494,27 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push(`Enabled: ${cfg.speedtest_enabled}`);
     lines.push(`Interval: ${cfg.speedtest_interval}s`);
     lines.push(`Requested server ID: ${cfg.speedtest_server || "auto"}`);
+    lines.push("");
 
-    generalOutput.textContent = lines.join("
-");
+    lines.push("== Live Log Viewer ==");
+    lines.push(`Poll interval: ${(liveLogPollMs / 1000).toFixed(0)}s`);
+    lines.push("Source: in-memory application log buffer mirrored from stdout logging");
+
+    generalOutput.textContent = lines.join("\n");
+    updateLogStatus();
+    return cfg;
   }
 
   // ----------------- Speedtest handling -----------------
+
+  function sanitizeServerId(value) {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return null;
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error("Speedtest server ID must be numeric");
+    }
+    return trimmed;
+  }
 
   async function refreshSpeedtestHistory() {
     const res = await fetch(`/api/speedtest/history?limit=${currentLimit}`);
@@ -477,7 +522,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tests = json.tests || [];
     if (!tests.length) return;
 
-    const labels = tests.map((t) => formatTickLabelFromTs(t.ts, 0, tests.length));
+    const labels = tests.map((t) => formatTickLabelFromTs(t.ts, tests.length));
     const downs = tests.map((t) => t.download_mbps);
     const ups = tests.map((t) => t.upload_mbps);
 
@@ -492,8 +537,7 @@ document.addEventListener("DOMContentLoaded", () => {
     gSpeed.data.datasets[0].data = [used, 100 - used];
     gSpeed.update();
 
-    document.getElementById("gSpeedText").innerText = `Down: ${last.download_mbps.toFixed(1)} Mbps
-Up: ${last.upload_mbps.toFixed(1)} Mbps`;
+    document.getElementById("gSpeedText").innerText = `Down: ${last.download_mbps.toFixed(1)} Mbps\nUp: ${last.upload_mbps.toFixed(1)} Mbps`;
   }
 
   async function refreshSpeedtestSummaryOnce() {
@@ -510,8 +554,8 @@ Up: ${last.upload_mbps.toFixed(1)} Mbps`;
       const requestedText = r.requested_server_id ? ` [requested ${r.requested_server_id}]` : "";
 
       speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(1)}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(1)} ms)${serverText}${requestedText}`;
-    } catch (e) {
-      // ignore summary refresh errors
+    } catch (_) {
+      // Ignore summary refresh errors so the rest of the dashboard keeps working.
     }
   }
 
@@ -519,8 +563,24 @@ Up: ${last.upload_mbps.toFixed(1)} Mbps`;
     generalOutput.textContent = "Running speedtest... this can take a bit...";
     speedtestSummary.textContent = "Speedtest: running...";
 
+    let requestedServerId = null;
     try {
-      const res = await fetch("/api/speedtest/run", { method: "POST" });
+      requestedServerId = sanitizeServerId(speedtestServerInput?.value || "");
+    } catch (err) {
+      generalOutput.textContent = `Speedtest input error: ${err.message}`;
+      speedtestSummary.textContent = "Speedtest: invalid server ID";
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/speedtest/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ server_id: requestedServerId }),
+      });
+
       if (!res.ok) {
         const errText = await res.text();
         generalOutput.textContent = "Speedtest failed: " + (errText || res.status);
@@ -557,13 +617,97 @@ Up: ${last.upload_mbps.toFixed(1)} Mbps`;
         textLines.push(`Resolved server: ${serverDisplay}`);
       }
 
-      generalOutput.textContent = textLines.join("
-");
+      generalOutput.textContent = textLines.join("\n");
       refreshSpeedtestHistory();
       refreshSpeedtestSummaryOnce();
-    } catch (e) {
-      generalOutput.textContent = "Speedtest error: " + e;
+      refreshLiveLogs(true);
+    } catch (err) {
+      generalOutput.textContent = "Speedtest error: " + err;
       speedtestSummary.textContent = "Speedtest: error";
+    }
+  }
+
+  // ----------------- Live log viewer -----------------
+
+  function updateLogStatus(message) {
+    if (!logStatus) return;
+    if (message) {
+      logStatus.textContent = message;
+      return;
+    }
+
+    if (!logViewerOpen) {
+      logStatus.textContent = "Live logs: paused";
+      return;
+    }
+
+    const follow = followLogsCheckbox?.checked ? "on" : "off";
+    logStatus.textContent = `Live logs: following (${follow})`;
+  }
+
+  function appendLogLines(lines) {
+    if (!liveLogOutput || !Array.isArray(lines) || !lines.length) return;
+
+    const existing = liveLogOutput.textContent === "Log viewer ready." ? "" : liveLogOutput.textContent;
+    const appended = (existing ? `${existing}\n` : "") + lines.join("\n");
+
+    const maxChars = 120000;
+    liveLogOutput.textContent = appended.length > maxChars ? appended.slice(-maxChars) : appended;
+
+    if (followLogsCheckbox?.checked) {
+      liveLogOutput.scrollTop = liveLogOutput.scrollHeight;
+    }
+  }
+
+  async function refreshLiveLogs(force = false) {
+    if (!logViewerOpen && !force) return;
+
+    try {
+      const limit = force ? 250 : 120;
+      const res = await fetch(`/api/logs/live?since=${encodeURIComponent(logNextSeq)}&limit=${limit}`);
+      const json = await res.json();
+      appendLogLines(json.lines || []);
+      if (typeof json.next_seq === "number") {
+        logNextSeq = json.next_seq;
+      }
+      updateLogStatus();
+    } catch (err) {
+      updateLogStatus(`Live logs: error (${err})`);
+    }
+  }
+
+  function startLogPolling() {
+    if (logPollHandle) {
+      clearInterval(logPollHandle);
+    }
+    logPollHandle = setInterval(() => {
+      refreshLiveLogs();
+    }, Math.max(1000, liveLogPollMs));
+  }
+
+  function stopLogPolling() {
+    if (logPollHandle) {
+      clearInterval(logPollHandle);
+      logPollHandle = null;
+    }
+  }
+
+  function toggleLiveLogs() {
+    logViewerOpen = !logViewerOpen;
+    if (logPanel) {
+      logPanel.style.display = logViewerOpen ? "flex" : "none";
+    }
+    if (btnToggleLogs) {
+      btnToggleLogs.textContent = logViewerOpen ? "Hide Live Logs" : "Follow Live Logs";
+    }
+
+    if (logViewerOpen) {
+      updateLogStatus();
+      refreshLiveLogs(true);
+      startLogPolling();
+    } else {
+      stopLogPolling();
+      updateLogStatus();
     }
   }
 
@@ -644,21 +788,42 @@ Up: ${last.upload_mbps.toFixed(1)} Mbps`;
     });
   });
 
-  btnShowConfig.addEventListener("click", () => {
+  if (speedtestServerInput) {
+    speedtestServerInput.addEventListener("input", () => {
+      speedtestServerInput.dataset.userEdited = "true";
+    });
+  }
+
+  btnShowConfig?.addEventListener("click", () => {
     showConfig();
   });
-  btnRunSpeedtest.addEventListener("click", runSpeedtestNow);
+  btnRunSpeedtest?.addEventListener("click", runSpeedtestNow);
+  btnToggleLogs?.addEventListener("click", toggleLiveLogs);
+  btnRefreshLogs?.addEventListener("click", () => refreshLiveLogs(true));
+  btnClearLogs?.addEventListener("click", () => {
+    liveLogOutput.textContent = "Log viewer cleared. Waiting for new lines...";
+    if (followLogsCheckbox?.checked) {
+      liveLogOutput.scrollTop = liveLogOutput.scrollHeight;
+    }
+  });
+  followLogsCheckbox?.addEventListener("change", () => {
+    updateLogStatus();
+    if (followLogsCheckbox.checked) {
+      liveLogOutput.scrollTop = liveLogOutput.scrollHeight;
+    }
+  });
 
   // ----------------- Initial loads -----------------
 
   showConfig()
     .catch(() => {
-      // ignore config load errors; UI can still continue
+      // Ignore config load errors; the UI can still continue.
     })
     .finally(() => {
       refreshProbeData();
       refreshSpeedtestHistory();
       refreshSpeedtestSummaryOnce();
+      updateLogStatus();
     });
 
   setInterval(() => {
@@ -668,4 +833,8 @@ Up: ${last.upload_mbps.toFixed(1)} Mbps`;
   }, Math.max(10 * 1000, probeInterval * 1000));
 
   setInterval(updateCountdown, 1000);
+
+  window.addEventListener("beforeunload", () => {
+    stopLogPolling();
+  });
 });
