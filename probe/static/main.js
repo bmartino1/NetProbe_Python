@@ -1,76 +1,66 @@
 // static/main.js
 
+// Netprobe frontend updates in this revision:
+// 1. Show fuller date + time labels on charts so month/day context is visible.
+// 2. Display multi-domain DNS test targets from DNS_TEST_SITES.
+// 3. Surface configured speedtest server details from SPEEDTEST_SERVER.
+
 document.addEventListener("DOMContentLoaded", () => {
   const rawProbeInterval = parseInt(
     document.body.getAttribute("data-probe-interval"),
     10
   );
   const probeInterval =
-    !isNaN(rawProbeInterval) && rawProbeInterval > 0
-      ? rawProbeInterval
-      : 30;
+    !isNaN(rawProbeInterval) && rawProbeInterval > 0 ? rawProbeInterval : 30;
 
   const nextProbeEl = document.getElementById("nextProbe");
   const lastProbeEl = document.getElementById("lastProbe");
   const generalOutput = document.getElementById("generalOutput");
   const speedtestSummary = document.getElementById("speedtestSummary");
-
   const dbBackendEl = document.getElementById("dbBackend");
 
   const btnShowConfig = document.getElementById("btnShowConfig");
   const btnRunSpeedtest = document.getElementById("btnRunSpeedtest");
   const rangeSelects = document.querySelectorAll(".range-select");
   const panelToggles = document.querySelectorAll(".panel-toggle");
-
   const dnsSeriesControls = document.getElementById("dns-series-controls");
 
   let lastTimestamp = null;
   let currentLimit = 0;
 
-  // DNS per-server label + dataset bookkeeping
+  // DNS per-server label + dataset bookkeeping.
   let dnsServerLabels = {}; // ip -> label for checkboxes/legend
-  let dnsServerOrder = []; // array of ips in consistent order
+  let dnsServerOrder = []; // ordered array of IPs in chart order
   let dnsDatasetsInitialized = false;
 
-  // ----------------- Range → limit helper -----------------
+  // ----------------- Range -> limit helper -----------------
 
   function rangeValueToLimit(value) {
     const secondsMap = {
-      // seconds
       "5s": 5,
       "10s": 10,
       "15s": 15,
       "30s": 30,
       "45s": 45,
       "60s": 60,
-
-      // minutes
       "5m": 5 * 60,
       "10min": 10 * 60,
       "15m": 15 * 60,
       "20min": 20 * 60,
       "30m": 30 * 60,
       "45min": 45 * 60,
-
-      // hours
       "1h": 60 * 60,
       "3h": 3 * 60 * 60,
       "6h": 6 * 60 * 60,
       "9h": 9 * 60 * 60,
       "12h": 12 * 60 * 60,
       "24h": 24 * 60 * 60,
-
-      // days
       "3d": 3 * 24 * 60 * 60,
       "5d": 5 * 24 * 60 * 60,
-
-      // weeks
       "1w": 7 * 24 * 60 * 60,
       "2w": 14 * 24 * 60 * 60,
       "3w": 21 * 24 * 60 * 60,
-
-      // months (approx 30 days each)
-      "1m": 30 * 24 * 60 * 60,   // keep legacy key
+      "1m": 30 * 24 * 60 * 60,
       "1mo": 30 * 24 * 60 * 60,
       "2mo": 60 * 24 * 60 * 60,
       "3mo": 90 * 24 * 60 * 60,
@@ -83,8 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
       "10mo": 300 * 24 * 60 * 60,
       "11mo": 330 * 24 * 60 * 60,
       "12mo": 365 * 24 * 60 * 60,
-
-      // year
       "1y": 365 * 24 * 60 * 60,
     };
 
@@ -94,14 +82,48 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function initCurrentLimit() {
-    if (rangeSelects.length === 0) {
-      currentLimit = 2880;
-    } else {
-      currentLimit = rangeValueToLimit(rangeSelects[0].value);
-    }
+    currentLimit = rangeSelects.length === 0 ? 2880 : rangeValueToLimit(rangeSelects[0].value);
   }
 
   initCurrentLimit();
+
+  // ----------------- Time label helpers -----------------
+
+  function formatTickLabelFromTs(tsSeconds, index, totalCount) {
+    const date = new Date(tsSeconds * 1000);
+
+    // For short windows, keep the label compact.
+    if (totalCount <= 48) {
+      return date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+
+    // For larger windows, alternate between slightly denser labels.
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+    });
+  }
+
+  function buildTimeLabels(rows) {
+    return rows.map((row, index) => formatTickLabelFromTs(row.ts, index, rows.length));
+  }
+
+  function formatFullTimestamp(tsSeconds) {
+    return new Date(tsSeconds * 1000).toLocaleString([], {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
 
   // ----------------- Charts & Gauges -----------------
 
@@ -110,11 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
       type: "doughnut",
       data: {
         labels: [label, "Remaining"],
-        datasets: [
-          {
-            data: [0, 100],
-          },
-        ],
+        datasets: [{ data: [0, 100] }],
       },
       options: {
         circumference: 180,
@@ -127,31 +145,6 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     });
   }
-
-  const gScore = makeGauge(
-    document.getElementById("gScore").getContext("2d"),
-    "Score"
-  );
-  const gLoss = makeGauge(
-    document.getElementById("gLoss").getContext("2d"),
-    "Loss"
-  );
-  const gLatency = makeGauge(
-    document.getElementById("gLatency").getContext("2d"),
-    "Latency"
-  );
-  const gJitter = makeGauge(
-    document.getElementById("gJitter").getContext("2d"),
-    "Jitter"
-  );
-  const gDns = makeGauge(
-    document.getElementById("gDns").getContext("2d"),
-    "DNS"
-  );
-  const gSpeed = makeGauge(
-    document.getElementById("gSpeed").getContext("2d"),
-    "Bandwidth"
-  );
 
   function makeHistoryChart(ctx, label) {
     return new Chart(ctx, {
@@ -168,9 +161,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ],
       },
       options: {
+        maintainAspectRatio: true,
         scales: {
           x: {
-            ticks: { maxTicksLimit: 8 },
+            ticks: {
+              maxTicksLimit: 8,
+              maxRotation: 0,
+              autoSkip: true,
+            },
           },
           y: {
             beginAtZero: true,
@@ -180,26 +178,18 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const cScoreHistory = makeHistoryChart(
-    document.getElementById("cScoreHistory").getContext("2d"),
-    "Score"
-  );
-  const cLossHistory = makeHistoryChart(
-    document.getElementById("cLossHistory").getContext("2d"),
-    "Loss %"
-  );
-  const cLatencyHistory = makeHistoryChart(
-    document.getElementById("cLatencyHistory").getContext("2d"),
-    "Latency ms"
-  );
-  const cJitterHistory = makeHistoryChart(
-    document.getElementById("cJitterHistory").getContext("2d"),
-    "Jitter ms"
-  );
-  const cDnsHistory = makeHistoryChart(
-    document.getElementById("cDnsHistory").getContext("2d"),
-    "DNS ms"
-  );
+  const gScore = makeGauge(document.getElementById("gScore").getContext("2d"), "Score");
+  const gLoss = makeGauge(document.getElementById("gLoss").getContext("2d"), "Loss");
+  const gLatency = makeGauge(document.getElementById("gLatency").getContext("2d"), "Latency");
+  const gJitter = makeGauge(document.getElementById("gJitter").getContext("2d"), "Jitter");
+  const gDns = makeGauge(document.getElementById("gDns").getContext("2d"), "DNS");
+  const gSpeed = makeGauge(document.getElementById("gSpeed").getContext("2d"), "Bandwidth");
+
+  const cScoreHistory = makeHistoryChart(document.getElementById("cScoreHistory").getContext("2d"), "Score");
+  const cLossHistory = makeHistoryChart(document.getElementById("cLossHistory").getContext("2d"), "Loss %");
+  const cLatencyHistory = makeHistoryChart(document.getElementById("cLatencyHistory").getContext("2d"), "Latency ms");
+  const cJitterHistory = makeHistoryChart(document.getElementById("cJitterHistory").getContext("2d"), "Jitter ms");
+  const cDnsHistory = makeHistoryChart(document.getElementById("cDnsHistory").getContext("2d"), "DNS ms");
 
   const cSpeedHistory = new Chart(
     document.getElementById("cSpeedHistory").getContext("2d"),
@@ -223,9 +213,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ],
       },
       options: {
+        maintainAspectRatio: true,
         scales: {
           x: {
-            ticks: { maxTicksLimit: 8 },
+            ticks: {
+              maxTicksLimit: 8,
+              maxRotation: 0,
+              autoSkip: true,
+            },
           },
           y: {
             beginAtZero: true,
@@ -252,7 +247,6 @@ document.addEventListener("DOMContentLoaded", () => {
     servers.forEach((ip, idx) => {
       const label = dnsServerLabels[ip] || ip;
 
-      // Chart dataset
       cDnsHistory.data.datasets.push({
         label,
         data: [],
@@ -261,7 +255,6 @@ document.addEventListener("DOMContentLoaded", () => {
         hidden: false,
       });
 
-      // Checkbox UI
       if (dnsSeriesControls) {
         const wrapper = document.createElement("label");
         wrapper.className = "dns-series-label";
@@ -280,10 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         cb.addEventListener("change", () => {
           const i = parseInt(cb.dataset.dnsIndex, 10);
-          if (
-            !isNaN(i) &&
-            cDnsHistory.data.datasets[i] !== undefined
-          ) {
+          if (!isNaN(i) && cDnsHistory.data.datasets[i] !== undefined) {
             cDnsHistory.data.datasets[i].hidden = !cb.checked;
             cDnsHistory.update();
           }
@@ -300,9 +290,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch(`/api/score/recent?limit=${currentLimit}`);
     const json = await res.json();
     const data = json.data || [];
+
     if (!data.length) {
-      generalOutput.textContent =
-        "No probe data yet. Waiting for first measurement…";
+      generalOutput.textContent = "No probe data yet. Waiting for first measurement...";
       return;
     }
 
@@ -315,10 +305,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const jitter = last.avg_jitter_ms || 0;
     const dns = last.avg_dns_latency_ms || 0;
 
-    const lastDate = new Date(last.ts * 1000);
-    lastProbeEl.textContent = `Last probe: ${lastDate.toLocaleString()}`;
+    lastProbeEl.textContent = `Last probe: ${formatFullTimestamp(last.ts)}`;
 
-    // Gauges
     gScore.data.datasets[0].data = [score, 100 - score];
     gScore.update();
 
@@ -327,88 +315,59 @@ document.addEventListener("DOMContentLoaded", () => {
     gLoss.update();
 
     const latencyGaugeVal = clamp(latency, 200);
-    gLatency.data.datasets[0].data = [
-      200 - latencyGaugeVal,
-      latencyGaugeVal,
-    ];
+    gLatency.data.datasets[0].data = [200 - latencyGaugeVal, latencyGaugeVal];
     gLatency.update();
 
     const jitterGaugeVal = clamp(jitter, 100);
-    gJitter.data.datasets[0].data = [
-      100 - jitterGaugeVal,
-      jitterGaugeVal,
-    ];
+    gJitter.data.datasets[0].data = [100 - jitterGaugeVal, jitterGaugeVal];
     gJitter.update();
 
     const dnsGaugeVal = clamp(dns, 200);
     gDns.data.datasets[0].data = [200 - dnsGaugeVal, dnsGaugeVal];
     gDns.update();
 
-    // Gauge text
-    document.getElementById(
-      "gScoreText"
-    ).innerText = `Score: ${score.toFixed(1)}%`;
-    document.getElementById(
-      "gLossText"
-    ).innerText = `Loss: ${loss.toFixed(2)} %`;
-    document.getElementById(
-      "gLatencyText"
-    ).innerText = `Latency: ${latency.toFixed(1)} ms`;
-    document.getElementById(
-      "gJitterText"
-    ).innerText = `Jitter: ${jitter.toFixed(1)} ms`;
-    document.getElementById(
-      "gDnsText"
-    ).innerText = `DNS: ${dns.toFixed(1)} ms`;
+    document.getElementById("gScoreText").innerText = `Score: ${score.toFixed(1)}%`;
+    document.getElementById("gLossText").innerText = `Loss: ${loss.toFixed(2)} %`;
+    document.getElementById("gLatencyText").innerText = `Latency: ${latency.toFixed(1)} ms`;
+    document.getElementById("gJitterText").innerText = `Jitter: ${jitter.toFixed(1)} ms`;
+    document.getElementById("gDnsText").innerText = `DNS: ${dns.toFixed(1)} ms`;
 
-    // History charts
-    const labels = data.map((d) =>
-      new Date(d.ts * 1000).toLocaleTimeString()
-    );
+    const labels = buildTimeLabels(data);
 
     cScoreHistory.data.labels = labels;
     cScoreHistory.data.datasets[0].data = data.map((d) => d.score);
     cScoreHistory.update();
 
     cLossHistory.data.labels = labels;
-    cLossHistory.data.datasets[0].data = data.map(
-      (d) => d.avg_loss_pct
-    );
+    cLossHistory.data.datasets[0].data = data.map((d) => d.avg_loss_pct);
     cLossHistory.update();
 
     cLatencyHistory.data.labels = labels;
-    cLatencyHistory.data.datasets[0].data = data.map(
-      (d) => d.avg_latency_ms
-    );
+    cLatencyHistory.data.datasets[0].data = data.map((d) => d.avg_latency_ms);
     cLatencyHistory.update();
 
     cJitterHistory.data.labels = labels;
-    cJitterHistory.data.datasets[0].data = data.map(
-      (d) => d.avg_jitter_ms
-    );
+    cJitterHistory.data.datasets[0].data = data.map((d) => d.avg_jitter_ms);
     cJitterHistory.update();
 
-    // DNS: average + per-server, if available
     cDnsHistory.data.labels = labels;
 
-    const firstRow = data[0];
-    if (firstRow && firstRow.dns_per_server) {
-      // We have per-server breakdown from backend
-      const servers = Object.keys(firstRow.dns_per_server);
+    const firstRowWithDns = data.find((row) => row.dns_per_server && Object.keys(row.dns_per_server).length);
+    if (firstRowWithDns && firstRowWithDns.dns_per_server) {
+      const servers = Object.keys(firstRowWithDns.dns_per_server);
       ensureDnsDatasets(servers);
 
       dnsServerOrder.forEach((ip, idx) => {
         const series = data.map((d) => {
           if (!d.dns_per_server) return null;
-          const v = d.dns_per_server[ip];
-          return typeof v === "number" ? v : null;
+          const value = d.dns_per_server[ip];
+          return typeof value === "number" ? value : null;
         });
         if (cDnsHistory.data.datasets[idx]) {
           cDnsHistory.data.datasets[idx].data = series;
         }
       });
     } else {
-      // Fallback: only average DNS, single line
       if (!dnsDatasetsInitialized) {
         cDnsHistory.data.datasets = [
           {
@@ -420,9 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ];
         dnsDatasetsInitialized = true;
       }
-      cDnsHistory.data.datasets[0].data = data.map(
-        (d) => d.avg_dns_latency_ms
-      );
+      cDnsHistory.data.datasets[0].data = data.map((d) => d.avg_dns_latency_ms);
     }
     cDnsHistory.update();
   }
@@ -430,18 +387,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----------------- Config / Env display -----------------
 
   async function showConfig() {
-    generalOutput.textContent = "Loading config / env…";
+    generalOutput.textContent = "Loading config / env...";
     const res = await fetch("/api/config");
     const cfg = await res.json();
 
     if (dbBackendEl && cfg.db_engine) {
       dbBackendEl.textContent = `DB: ${cfg.db_engine}`;
-    } else if (dbBackendEl && !cfg.db_engine) {
+    } else if (dbBackendEl) {
       dbBackendEl.textContent = "DB: sqlite";
     }
 
     const lines = [];
-
     lines.push("== Probe Settings ==");
     lines.push(`DB engine: ${cfg.db_engine || "sqlite"}`);
     lines.push(`Probe interval: ${cfg.probe_interval}s`);
@@ -452,30 +408,31 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Ping Targets ==");
     if (cfg.gateway_ip) lines.push(`Gateway: ${cfg.gateway_ip}`);
     if (cfg.router_ip) lines.push(`Router: ${cfg.router_ip}`);
-    if (cfg.sites && cfg.sites.length)
-      lines.push(`Sites: ${cfg.sites.join(", ")}`);
+    if (cfg.sites && cfg.sites.length) lines.push(`Sites: ${cfg.sites.join(", ")}`);
     lines.push("");
 
     lines.push("== DNS ==");
-    lines.push(`Test domain: ${cfg.dns_test_site}`);
+    if (Array.isArray(cfg.dns_test_sites) && cfg.dns_test_sites.length) {
+      lines.push(`Test domains: ${cfg.dns_test_sites.join(", ")}`);
+    } else if (cfg.dns_test_site) {
+      lines.push(`Test domain: ${cfg.dns_test_site}`);
+    }
 
-    // Build DNS labels map for chart + checkboxes
     dnsServerLabels = {};
     if (Array.isArray(cfg.dns_servers_detail)) {
-      // expecting [{name, ip}, ...]
-      cfg.dns_servers_detail.forEach((s) => {
-        if (!s || !s.ip) return;
-        const ip = s.ip;
-        const label = s.name ? `${s.name} (${ip})` : ip;
-        dnsServerLabels[ip] = label;
+      cfg.dns_servers_detail.forEach((server) => {
+        if (!server || !server.ip) return;
+        const label = server.name ? `${server.name} (${server.ip})` : server.ip;
+        dnsServerLabels[server.ip] = label;
       });
+
       const displayList = cfg.dns_servers_detail
-        .map((s) =>
-          s && s.ip
-            ? (s.name ? `${s.name} (${s.ip})` : s.ip)
-            : null
-        )
+        .map((server) => {
+          if (!server || !server.ip) return null;
+          return server.name ? `${server.name} (${server.ip})` : server.ip;
+        })
         .filter(Boolean);
+
       if (displayList.length) {
         lines.push(`Servers: ${displayList.join(", ")}`);
       }
@@ -487,7 +444,6 @@ document.addEventListener("DOMContentLoaded", () => {
         lines.push(`Servers: ${cfg.dns_servers.join(", ")}`);
       }
     }
-
     lines.push("");
 
     lines.push("== Score Weights ==");
@@ -507,25 +463,21 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Speedtest ==");
     lines.push(`Enabled: ${cfg.speedtest_enabled}`);
     lines.push(`Interval: ${cfg.speedtest_interval}s`);
+    lines.push(`Requested server ID: ${cfg.speedtest_server || "auto"}`);
 
-    generalOutput.textContent = lines.join("\n");
+    generalOutput.textContent = lines.join("
+");
   }
 
   // ----------------- Speedtest handling -----------------
 
   async function refreshSpeedtestHistory() {
-    const res = await fetch(
-      `/api/speedtest/history?limit=${currentLimit}`
-    );
+    const res = await fetch(`/api/speedtest/history?limit=${currentLimit}`);
     const json = await res.json();
     const tests = json.tests || [];
-    if (!tests.length) {
-      return;
-    }
+    if (!tests.length) return;
 
-    const labels = tests.map((t) =>
-      new Date(t.ts * 1000).toLocaleTimeString()
-    );
+    const labels = tests.map((t) => formatTickLabelFromTs(t.ts, 0, tests.length));
     const downs = tests.map((t) => t.download_mbps);
     const ups = tests.map((t) => t.upload_mbps);
 
@@ -536,18 +488,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const last = tests[tests.length - 1];
     const maxMbps = Math.max(...downs, ...ups, 1);
-    const used = clamp(
-      (last.download_mbps / maxMbps) * 100,
-      100
-    );
+    const used = clamp((last.download_mbps / maxMbps) * 100, 100);
     gSpeed.data.datasets[0].data = [used, 100 - used];
     gSpeed.update();
 
-    document.getElementById(
-      "gSpeedText"
-    ).innerText = `Down: ${last.download_mbps.toFixed(
-      1
-    )} Mbps\nUp: ${last.upload_mbps.toFixed(1)} Mbps`;
+    document.getElementById("gSpeedText").innerText = `Down: ${last.download_mbps.toFixed(1)} Mbps
+Up: ${last.upload_mbps.toFixed(1)} Mbps`;
   }
 
   async function refreshSpeedtestSummaryOnce() {
@@ -556,62 +502,65 @@ document.addEventListener("DOMContentLoaded", () => {
       const json = await res.json();
       const r = json.result;
       if (!r) return;
-      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
-        1
-      )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
-        1
-      )} ms)`;
+
+      const serverBits = [];
+      if (r.server?.name) serverBits.push(r.server.name);
+      if (r.server?.country) serverBits.push(r.server.country);
+      const serverText = serverBits.length ? ` via ${serverBits.join(", ")}` : "";
+      const requestedText = r.requested_server_id ? ` [requested ${r.requested_server_id}]` : "";
+
+      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(1)}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(1)} ms)${serverText}${requestedText}`;
     } catch (e) {
-      // ignore
+      // ignore summary refresh errors
     }
   }
 
   async function runSpeedtestNow() {
-    generalOutput.textContent = "Running speedtest… this can take a bit…";
-    speedtestSummary.textContent = "Speedtest: running…";
+    generalOutput.textContent = "Running speedtest... this can take a bit...";
+    speedtestSummary.textContent = "Speedtest: running...";
 
     try {
-      const res = await fetch("/api/speedtest/run", {
-        method: "POST",
-      });
+      const res = await fetch("/api/speedtest/run", { method: "POST" });
       if (!res.ok) {
         const errText = await res.text();
-        generalOutput.textContent =
-          "Speedtest failed: " + (errText || res.status);
+        generalOutput.textContent = "Speedtest failed: " + (errText || res.status);
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
+
       const json = await res.json();
       if (!json.success) {
-        generalOutput.textContent =
-          "Speedtest failed: " + (json.error || "unknown error");
+        generalOutput.textContent = "Speedtest failed: " + (json.error || "unknown error");
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
+
       const r = json.result;
-      const ts = new Date(r.timestamp * 1000).toLocaleString();
       const textLines = [
         "== Manual Speedtest Result ==",
-        `Time: ${ts}`,
+        `Time: ${formatFullTimestamp(r.timestamp)}`,
         `Ping: ${r.ping_ms?.toFixed(1)} ms`,
         `Download: ${r.download_mbps?.toFixed(2)} Mbps`,
         `Upload: ${r.upload_mbps?.toFixed(2)} Mbps`,
+        `Requested server ID: ${r.requested_server_id || "auto"}`,
       ];
-      if (r.server) {
-        const s = r.server;
-        const srvStr = `${s.name || ""} (${s.host || ""}) [${
-          s.country || ""
-        }]`;
-        textLines.push(`Server: ${srvStr}`);
-      }
-      generalOutput.textContent = textLines.join("\n");
-      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(
-        1
-      )}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(
-        1
-      )} ms)`;
 
+      if (r.server) {
+        const serverDisplay = [
+          r.server.id ? `id ${r.server.id}` : null,
+          r.server.name || null,
+          r.server.host || null,
+          r.server.country || null,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        textLines.push(`Resolved server: ${serverDisplay}`);
+      }
+
+      generalOutput.textContent = textLines.join("
+");
       refreshSpeedtestHistory();
+      refreshSpeedtestSummaryOnce();
     } catch (e) {
       generalOutput.textContent = "Speedtest error: " + e;
       speedtestSummary.textContent = "Speedtest: error";
@@ -622,47 +571,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateCountdown() {
     if (!lastTimestamp) {
-      nextProbeEl.textContent = "Next probe in: waiting for first sample…";
+      nextProbeEl.textContent = "Next probe in: waiting for first sample...";
       return;
     }
+
     const nowSec = Math.floor(Date.now() / 1000);
     let elapsed = nowSec - lastTimestamp;
     if (elapsed < 0) elapsed = 0;
+
     let remaining = probeInterval - (elapsed % probeInterval);
     if (remaining === probeInterval) remaining = 0;
     nextProbeEl.textContent = `Next probe in: ${remaining}s`;
   }
 
-  // ----------------- Panel visibility (checkboxes) -----------------
+  // ----------------- Panel visibility -----------------
 
   function applyPanelVisibilityFromStorage() {
     const saved = localStorage.getItem("netprobe_panel_vis");
-    let vis = {};
+    let visibility = {};
+
     if (saved) {
       try {
-        vis = JSON.parse(saved);
+        visibility = JSON.parse(saved);
       } catch (_) {
-        vis = {};
+        visibility = {};
       }
     }
+
     panelToggles.forEach((cb) => {
       const targetId = cb.getAttribute("data-target");
       const panel = document.getElementById(targetId);
       if (!panel) return;
-      const key = targetId;
-      const shouldShow = vis[key] !== undefined ? vis[key] : true;
+
+      const shouldShow = visibility[targetId] !== undefined ? visibility[targetId] : true;
       cb.checked = shouldShow;
       panel.style.display = shouldShow ? "" : "none";
     });
   }
 
   function savePanelVisibility() {
-    const vis = {};
+    const visibility = {};
     panelToggles.forEach((cb) => {
       const targetId = cb.getAttribute("data-target");
-      vis[targetId] = cb.checked;
+      visibility[targetId] = cb.checked;
     });
-    localStorage.setItem("netprobe_panel_vis", JSON.stringify(vis));
+    localStorage.setItem("netprobe_panel_vis", JSON.stringify(visibility));
   }
 
   panelToggles.forEach((cb) => {
@@ -682,8 +635,8 @@ document.addEventListener("DOMContentLoaded", () => {
   rangeSelects.forEach((sel) => {
     sel.addEventListener("change", () => {
       const value = sel.value;
-      rangeSelects.forEach((s) => {
-        s.value = value;
+      rangeSelects.forEach((other) => {
+        other.value = value;
       });
       currentLimit = rangeValueToLimit(value);
       refreshProbeData();
@@ -692,18 +645,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   btnShowConfig.addEventListener("click", () => {
-    // fire-and-forget; UI will update via async
     showConfig();
   });
   btnRunSpeedtest.addEventListener("click", runSpeedtestNow);
 
   // ----------------- Initial loads -----------------
 
-  // First, load config so DNS labels and DB badge are available,
-  // then kick off data refreshes.
   showConfig()
     .catch(() => {
-      // ignore errors here; UI will still function
+      // ignore config load errors; UI can still continue
     })
     .finally(() => {
       refreshProbeData();
@@ -711,13 +661,11 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshSpeedtestSummaryOnce();
     });
 
-  setInterval(
-    () => {
-      refreshProbeData();
-      refreshSpeedtestHistory();
-      refreshSpeedtestSummaryOnce();
-    },
-    Math.max(10 * 1000, probeInterval * 1000)
-  );
+  setInterval(() => {
+    refreshProbeData();
+    refreshSpeedtestHistory();
+    refreshSpeedtestSummaryOnce();
+  }, Math.max(10 * 1000, probeInterval * 1000));
+
   setInterval(updateCountdown, 1000);
 });
