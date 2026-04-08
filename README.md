@@ -159,40 +159,42 @@ volumes:
   netprobe_data:
 ```
 
-** Both Quick Starts use the sqlfile option for longterm persitent data... Postgress backend change over is avilable via adational docker options latter
+** Both Quick Starts use the sqlfile option for longterm persitent data... Postgres backend changeover is available via additional docker options later
 
 ---
 ## Environment variables
 
-| Variable                  | Default                                      | Description                                                                 |
-|---------------------------|----------------------------------------------|-----------------------------------------------------------------------------|
-| `WEB_PORT`                | `8080`                                       | Port inside container for the web UI / API.                                |
-| `DB_PATH`                 | `/data/netprobe.sqlite`                      | SQLite DB path (used when `DB_ENGINE=sqlite`).                             |
-| `DB_ENGINE`               | `sqlite`                                     | Database backend: `sqlite` or `postgres`.                                  |
-| `USE_POSTGRES`            | *(empty)*                                    | Legacy flag; if `true`, forces Postgres unless `DB_ENGINE` is set.         |
-| `POSTGRES_HOST`           | `postgres`                                   | Postgres host when `DB_ENGINE=postgres` or `USE_POSTGRES=true`.            |
-| `POSTGRES_PORT`           | `5432`                                       | Postgres TCP port.                                                         |
-| `POSTGRES_DB`             | `netprobe`                                   | Postgres database name.                                                    |
-| `POSTGRES_USER`           | `netprobe`                                   | Postgres username.                                                         |
-| `POSTGRES_PASSWORD`       | `netprobe`                                   | Postgres password.                                                         |
-| `PROBE_INTERVAL`          | `30`                                         | Seconds between probe runs.                                                |
-| `PING_COUNT`              | `20`                                         | ICMP packets per target per probe.                                         |
-| `APP_TIMEZONE`            | `UTC`                                        | Label shown in UI (no TZ conversion yet).                                  |
-| `SITES`                   | `fast.com,google.com,youtube.com,amazon.com` | Comma-separated ping targets.                                              |
-| `ROUTER_IP`               | *(empty)*                                    | Optional LAN router IP.                                                    |
-| `DNS_TEST_SITE`           | `google.com`                                 | Domain for DNS latency tests.                                              |
-| `DNS_NAMESERVER_1..4`     | *(labels)*                                   | Human-readable DNS names for UI.                                           |
-| `DNS_NAMESERVER_1..4_IP`  | *(IPs)*                                      | DNS IPs to probe.                                                          |
-| `WEIGHT_LOSS`             | `0.6`                                        | Weight of packet loss in score (0–1, sum = 1).                             |
-| `WEIGHT_LATENCY`          | `0.15`                                       | Weight of latency.                                                         |
-| `WEIGHT_JITTER`           | `0.2`                                        | Weight of jitter.                                                          |
-| `WEIGHT_DNS_LATENCY`      | `0.05`                                       | Weight of DNS latency.                                                     |
-| `THRESHOLD_LOSS`          | `5`                                          | Loss % considered “max bad” for scoring.                                   |
-| `THRESHOLD_LATENCY`       | `100`                                        | Latency ms considered “max bad”.                                           |
-| `THRESHOLD_JITTER`        | `30`                                         | Jitter ms considered “max bad”.                                            |
-| `THRESHOLD_DNS_LATENCY`   | `100`                                        | DNS ms considered “max bad”.                                               |
-| `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                |
-| `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                      |
+| Variable                  | Default                                      | Description                                                                   |
+|---------------------------|----------------------------------------------|-------------------------------------------------------------------------------|
+| `WEB_PORT`                | `8080`                                       | Port inside container for the web UI / API.                                   |
+| `DB_PATH`                 | `/data/netprobe.sqlite`                      | SQLite DB path (used when `DB_ENGINE=sqlite`).                                |
+| `DB_ENGINE`               | `sqlite`                                     | Database backend: `sqlite` or `postgres`.                                     |
+| `USE_POSTGRES`            | *(empty)*                                    | Legacy flag; if `true`, forces Postgres unless `DB_ENGINE` is set.            |
+| `POSTGRES_HOST`           | `postgres`                                   | Postgres host when `DB_ENGINE=postgres` or `USE_POSTGRES=true`.               |
+| `POSTGRES_PORT`           | `5432`                                       | Postgres TCP port.                                                            |
+| `POSTGRES_DB`             | `netprobe`                                   | Postgres database name.                                                       |
+| `POSTGRES_USER`           | `netprobe`                                   | Postgres username.                                                            |
+| `POSTGRES_PASSWORD`       | `netprobe`                                   | Postgres password.                                                            |
+| `PROBE_INTERVAL`          | `30`                                         | Seconds between probe runs.                                                   |
+| `PING_COUNT`              | `20`                                         | ICMP packets per target per probe.                                            |
+| `APP_TIMEZONE`            | `UTC`                                        | Label shown in UI (no TZ conversion yet).                                     |
+| `SITES`                   | `fast.com,google.com,youtube.com,amazon.com` | Comma-separated ping targets.                                                 |
+| `ROUTER_IP`               | *(empty)*                                    | Optional LAN router IP.                                                       |
+| `DNS_TEST_SITE`           | `google.com`                                 | Domain for DNS latency tests.                                                 |
+| `DNS_NAMESERVER_1..4`     | *(labels)*                                   | Human-readable DNS names for UI.                                              |
+| `DNS_NAMESERVER_1..4_IP`  | *(IPs)*                                      | DNS IPs to probe.                                                             |
+| `WEIGHT_LOSS`             | `0.6`                                        | Weight of packet loss in score (0–1, sum = 1).                                |
+| `WEIGHT_LATENCY`          | `0.15`                                       | Weight of latency.                                                            |
+| `WEIGHT_JITTER`           | `0.2`                                        | Weight of jitter.                                                             |
+| `WEIGHT_DNS_LATENCY`      | `0.05`                                       | Weight of DNS latency.                                                        |
+| `THRESHOLD_LOSS`          | `5`                                          | Loss % considered “max bad” for scoring.                                      |
+| `THRESHOLD_LATENCY`       | `100`                                        | Latency ms considered “max bad”.                                              |
+| `THRESHOLD_JITTER`        | `30`                                         | Jitter ms considered “max bad”.                                               |
+| `THRESHOLD_DNS_LATENCY`   | `100`                                        | DNS ms considered “max bad”.                                                  |
+| `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                   |
+| `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                         |
+| `SPEEDTEST_SERVER`        | `""`                                         | Optional Speedtest server ID. Leave blank to use automatic server selection.  |
+| `LIVE_LOG_POLL_SECONDS`   | `2`                                          | Seconds between live log viewer refreshes in the web UI.                      |
 
 You can also put these in `config.env` and uncomment `env_file` in the
 Compose file.
@@ -255,6 +257,34 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
   }
 
 ---
+
+## Find a Speedtest Server ID
+
+If you want to manually target a specific Speedtest server, you can list available server IDs from inside the running Netprobe container.
+
+### Command
+
+```bash
+docker exec -it netprobe speedtest-cli --list
+```
+
+This returns a list of nearby Speedtest servers with their numeric IDs.
+
+### Example output
+
+```text
+12345) Example ISP - Chicago, IL (12.34 km)
+23456) Another ISP - Rockford, IL (88.12 km)
+34567) Test Provider - Milwaukee, WI (140.55 km)
+```
+
+In this example, the server IDs are:
+
+- `12345`
+- `23456`
+- `34567`
+
+You can then use one of those IDs with Netprobe. 
 
 ## Troubleshooting
 
