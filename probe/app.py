@@ -28,58 +28,91 @@ if not logger.handlers:
     )
     logger.setLevel(logging.INFO)
 
+
+# -------------------------
+# Small config helpers
+# -------------------------
+
+
+def parse_bool_env(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+
+def parse_csv_env(name, default=""):
+    """
+    Parse a comma-separated environment variable into a clean list.
+
+    This is used for ping sites, DNS lookup sites, and optional server lists.
+    Empty items are ignored so values like "a.com, b.com, , c.com" still work.
+    """
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # -------------------------
 # Config from environment
 # -------------------------
 
 WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
 
-# Built-in defaults if the container is started with *no* env vars
+# Built-in defaults if the container is started with no env vars.
 DEFAULT_DB_PATH = "/data/netprobe.sqlite"
 DEFAULT_DB_ENGINE = "sqlite"
 
 DB_PATH = os.getenv("DB_PATH", DEFAULT_DB_PATH)
 
-# Database backend: sqlite (file) or postgres
+# Database backend: sqlite (file) or postgres.
 DB_ENGINE = os.getenv("DB_ENGINE", "").strip().lower()
-_use_pg_flag = os.getenv("USE_POSTGRES", "").strip().lower()
+USE_POSTGRES_FLAG = parse_bool_env("USE_POSTGRES", default=False)
 
-# Simple legacy flag: USE_POSTGRES=true forces postgres
-if _use_pg_flag in ("1", "true", "yes"):
+# Legacy behavior: USE_POSTGRES=true forces postgres unless DB_ENGINE is set.
+if not DB_ENGINE and USE_POSTGRES_FLAG:
     DB_ENGINE = "postgres"
 
-# If DB_ENGINE is missing or weird, fall back to sqlite file backend
+# If DB_ENGINE is missing or invalid, fall back to sqlite file backend.
 if DB_ENGINE not in ("sqlite", "postgres"):
     DB_ENGINE = DEFAULT_DB_ENGINE
 
 USING_POSTGRES = DB_ENGINE == "postgres"
 
 PROBE_INTERVAL = int(os.getenv("PROBE_INTERVAL", "30"))
-PING_COUNT = int(os.getenv("PING_COUNT", "4"))  # default you wanted
+PING_COUNT = int(os.getenv("PING_COUNT", "4"))
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "UTC")
 
-# Default sites if SITES is not set
-SITES = [
-    s.strip()
-    for s in os.getenv(
-        "SITES", "fast.com,google.com,youtube.com"
-    ).split(",")
-    if s.strip()
-]
+# Ping targets used by the regular ICMP checks.
+SITES = parse_csv_env("SITES", "fast.com,google.com,youtube.com")
 
-# Blank router IP by default
+# Optional router IP on the LAN.
 ROUTER_IP = os.getenv("ROUTER_IP", "").strip()
-DNS_TEST_SITE = os.getenv("DNS_TEST_SITE", "google.com").strip()
 
-# Default DNS servers if none provided via env
+# DNS lookup targets.
+#
+# Backward compatibility:
+# - DNS_TEST_SITES supports multiple comma-separated domains.
+# - DNS_TEST_SITE still works as the legacy single-domain variable.
+DNS_TEST_SITES = parse_csv_env(
+    "DNS_TEST_SITES",
+    os.getenv("DNS_TEST_SITE", "google.com"),
+)
+if not DNS_TEST_SITES:
+    DNS_TEST_SITES = ["google.com"]
+
+# Preserve a single representative value for older UI logic if needed.
+DNS_TEST_SITE = DNS_TEST_SITES[0]
+
+# Default DNS servers if none are provided via environment variables.
 DEFAULT_DNS_SERVERS = {
     1: ("Google_DNS", "8.8.8.8"),
     2: ("Quad9_DNS", "9.9.9.9"),
     3: ("CloudFlare_DNS", "1.1.1.1"),
 }
 
-DNS_SERVERS = []        # type: list[str]
-DNS_SERVERS_DETAIL = [] # type: list[dict]
+DNS_SERVERS = []
+DNS_SERVERS_DETAIL = []
 for i in range(1, 5):
     def_name, def_ip = DEFAULT_DNS_SERVERS.get(i, ("", ""))
     name = os.getenv(f"DNS_NAMESERVER_{i}", def_name).strip()
@@ -104,9 +137,15 @@ THRESHOLD_LATENCY = float(os.getenv("THRESHOLD_LATENCY", "100"))
 THRESHOLD_JITTER = float(os.getenv("THRESHOLD_JITTER", "30"))
 THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 
-# Speedtest
-SPEEDTEST_ENABLED = os.getenv("SPEEDTEST_ENABLED", "True").lower() == "true"
+# -------------------------------
+# Speedtest configuration
+# -------------------------------
+SPEEDTEST_ENABLED = parse_bool_env("SPEEDTEST_ENABLED", default=True)
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
+
+# Optional preferred speedtest server.
+# Accept a numeric server ID as used by speedtest-cli / speedtest.net.
+SPEEDTEST_SERVER = os.getenv("SPEEDTEST_SERVER", "").strip()
 
 logger.info(
     "Netprobe 2.0 starting with PROBE_INTERVAL=%ss, PING_COUNT=%s",
@@ -115,11 +154,15 @@ logger.info(
 )
 logger.info("Database backend: %s (DB_PATH=%s)", DB_ENGINE, DB_PATH)
 logger.info(
-    "Targets: gateway(auto), router=%s, sites=%s, dns_servers=%s",
+    "Targets: gateway(auto), router=%s, sites=%s, dns_servers=%s, dns_test_sites=%s",
     ROUTER_IP or "(none)",
-    ", ".join(SITES),
-    ", ".join(DNS_SERVERS),
+    ", ".join(SITES) or "(none)",
+    ", ".join(DNS_SERVERS) or "(none)",
+    ", ".join(DNS_TEST_SITES) or "(none)",
 )
+if SPEEDTEST_SERVER:
+    logger.info("Preferred speedtest server ID: %s", SPEEDTEST_SERVER)
+
 
 # -------------------------
 # Database helpers
@@ -133,8 +176,8 @@ class _WrappedPostgresCursor:
     def execute(self, query, params=None):
         if params is None:
             params = ()
-        # Translate SQLite-style "?" placeholders to psycopg2's "%s".
-        # Our SQL never has literal "?" in strings, so this is safe.
+        # Translate SQLite-style "?" placeholders to psycopg2 "%s".
+        # Our SQL never contains literal question marks in strings.
         query = query.replace("?", "%s")
         return self._inner.execute(query, params)
 
@@ -162,12 +205,10 @@ class _WrappedPostgresConnection:
         return self._inner.close()
 
 
+
 def get_db_connection():
     """
-    Return DB-API compatible connection to SQLite or Postgres.
-
-    - SQLite uses DB_PATH on the local volume.
-    - Postgres uses POSTGRES_* environment variables.
+    Return a DB-API-compatible connection to SQLite or Postgres.
     """
     if USING_POSTGRES:
         if psycopg2 is None:
@@ -182,10 +223,10 @@ def get_db_connection():
             password=os.getenv("POSTGRES_PASSWORD", "netprobe"),
         )
         return _WrappedPostgresConnection(conn)
-    else:
-        # SQLite file on a local Docker volume
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        return sqlite3.connect(DB_PATH)
+
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    return sqlite3.connect(DB_PATH)
+
 
 
 def ensure_db():
@@ -197,7 +238,7 @@ def ensure_db():
     else:
         id_col = "id INTEGER PRIMARY KEY AUTOINCREMENT"
 
-    # Aggregate probe metrics
+    # Aggregate probe metrics.
     cur.execute(
         f"""
         CREATE TABLE IF NOT EXISTS measurements (
@@ -212,7 +253,9 @@ def ensure_db():
         """
     )
 
-    # Detailed DNS per-server values, one row per (ts, server_ip)
+    # Detailed DNS per-server values, one row per (timestamp, server_ip).
+    # Each row stores the average latency for that DNS server across all
+    # configured DNS test domains during that probe cycle.
     cur.execute(
         f"""
         CREATE TABLE IF NOT EXISTS dns_measurements (
@@ -224,7 +267,7 @@ def ensure_db():
         """
     )
 
-    # Speedtest results
+    # Speedtest results.
     cur.execute(
         f"""
         CREATE TABLE IF NOT EXISTS speedtests (
@@ -233,15 +276,59 @@ def ensure_db():
             ping_ms REAL,
             download_mbps REAL,
             upload_mbps REAL,
+            server_id TEXT,
             server_name TEXT,
             server_host TEXT,
-            server_country TEXT
+            server_country TEXT,
+            requested_server_id TEXT
         );
         """
     )
 
     conn.commit()
     conn.close()
+
+
+
+def ensure_speedtests_schema():
+    """
+    Small schema migration for older installs.
+
+    Existing SQLite/Postgres deployments may already have the speedtests table
+    without server_id/requested_server_id. We add them in place if missing.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        if USING_POSTGRES:
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'speedtests'
+                """
+            )
+        else:
+            cur.execute("PRAGMA table_info(speedtests)")
+
+        rows = cur.fetchall() or []
+        if USING_POSTGRES:
+            existing = {r[0] for r in rows}
+        else:
+            existing = {r[1] for r in rows}
+
+        if "server_id" not in existing:
+            cur.execute("ALTER TABLE speedtests ADD COLUMN server_id TEXT")
+        if "requested_server_id" not in existing:
+            cur.execute(
+                "ALTER TABLE speedtests ADD COLUMN requested_server_id TEXT"
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
 
 
 def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
@@ -260,8 +347,9 @@ def insert_measurement(ts, avg_latency, avg_jitter, avg_loss, avg_dns, score):
     conn.close()
 
 
+
 def insert_dns_measurements(ts, dns_map):
-    """dns_map: {ip: latency_ms} for this probe timestamp."""
+    """dns_map: {server_ip: latency_ms} for this probe timestamp."""
     if not dns_map:
         return
     conn = get_db_connection()
@@ -276,6 +364,7 @@ def insert_dns_measurements(ts, dns_map):
         )
     conn.commit()
     conn.close()
+
 
 
 def fetch_recent(limit=2880):
@@ -297,10 +386,10 @@ def fetch_recent(limit=2880):
     return rows
 
 
+
 def fetch_dns_for_timestamps(ts_list):
     """
-    Return mapping: ts -> {ip: latency_ms}
-    for the given timestamps.
+    Return mapping: ts -> {server_ip: latency_ms} for the provided timestamps.
     """
     if not ts_list:
         return {}
@@ -321,10 +410,9 @@ def fetch_dns_for_timestamps(ts_list):
 
     out = {}
     for ts, ip, lat in rows:
-        if ts not in out:
-            out[ts] = {}
-        out[ts][ip] = lat
+        out.setdefault(ts, {})[ip] = lat
     return out
+
 
 
 def fetch_latest():
@@ -344,28 +432,39 @@ def fetch_latest():
     return row
 
 
-def insert_speedtest(ts, ping_ms, download_mbps, upload_mbps, server):
+
+def insert_speedtest(
+    ts,
+    ping_ms,
+    download_mbps,
+    upload_mbps,
+    server,
+    requested_server_id=None,
+):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
         INSERT INTO speedtests
         (ts, ping_ms, download_mbps, upload_mbps,
-         server_name, server_host, server_country)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+         server_id, server_name, server_host, server_country, requested_server_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ts,
             ping_ms,
             download_mbps,
             upload_mbps,
+            str(server.get("id")) if server and server.get("id") is not None else None,
             server.get("name") if server else None,
             server.get("host") if server else None,
             server.get("country") if server else None,
+            str(requested_server_id) if requested_server_id else None,
         ),
     )
     conn.commit()
     conn.close()
+
 
 
 def fetch_speedtests(limit=100):
@@ -374,7 +473,8 @@ def fetch_speedtests(limit=100):
     cur.execute(
         """
         SELECT ts, ping_ms, download_mbps, upload_mbps,
-               server_name, server_host, server_country
+               server_id, server_name, server_host, server_country,
+               requested_server_id
         FROM speedtests
         ORDER BY ts DESC
         LIMIT ?
@@ -387,13 +487,15 @@ def fetch_speedtests(limit=100):
     return rows
 
 
+
 def fetch_latest_speedtest():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         """
         SELECT ts, ping_ms, download_mbps, upload_mbps,
-               server_name, server_host, server_country
+               server_id, server_name, server_host, server_country,
+               requested_server_id
         FROM speedtests
         ORDER BY ts DESC
         LIMIT 1
@@ -409,8 +511,9 @@ def fetch_latest_speedtest():
 # -------------------------
 
 
+
 def get_default_gateway():
-    """Return default gateway IP inside the container, or None."""
+    """Return the default gateway IP inside the container, or None."""
     try:
         out = subprocess.check_output(
             ["sh", "-c", "ip route | awk '/default/ {print $3; exit}'"],
@@ -421,20 +524,19 @@ def get_default_gateway():
         else:
             logger.warning("No default gateway detected via ip route")
         return out or None
-    except Exception as e:
-        logger.error("Failed to get default gateway: %s", e)
+    except Exception as exc:
+        logger.error("Failed to get default gateway: %s", exc)
         return None
+
 
 
 def run_ping(host, count):
     """
-    Run ping and return:
-      latency (avg ms), jitter (max-min), loss (%).
-    Timeout scales with count because ping -q only prints at the end.
+    Run ping and return latency (avg ms), jitter (max-min), and loss (%).
     """
     out = ""
     err = ""
-    timeout = max(5, count * 2)  # ~2 s per packet
+    timeout = max(5, count * 2)
 
     try:
         proc = subprocess.run(
@@ -459,16 +561,19 @@ def run_ping(host, count):
             raise RuntimeError("no ping stdout")
 
         lines = out.splitlines()
-        loss_line = next((l for l in lines if "packet loss" in l), None)
+        loss_line = next((line for line in lines if "packet loss" in line), None)
         if not loss_line:
             raise RuntimeError("no packet loss line in ping output")
 
-        # e.g. "5 packets transmitted, 5 received, 0% packet loss, time 4004ms"
         loss_str = loss_line.split("%")[0].split()[-1]
         loss = float(loss_str)
 
         rtt_line = next(
-            (l for l in lines if "min/avg/max" in l or "min/mean/max" in l),
+            (
+                line
+                for line in lines
+                if "min/avg/max" in line or "min/mean/max" in line
+            ),
             None,
         )
 
@@ -490,11 +595,11 @@ def run_ping(host, count):
         )
         return {"host": host, "latency": rtt_avg, "jitter": jitter, "loss": loss}
 
-    except Exception as e:
+    except Exception as exc:
         logger.error(
             "ping to %s failed: %s; stdout=%r stderr=%r",
             host,
-            e,
+            exc,
             out,
             err,
         )
@@ -506,37 +611,54 @@ def run_ping(host, count):
         }
 
 
+
 def measure_dns_latency(domain, server, count):
     resolver = dns.resolver.Resolver(configure=False)
     resolver.nameservers = [server]
     times = []
+
     for _ in range(count):
         start = time.perf_counter()
         try:
             resolver.resolve(domain, "A", lifetime=3)
-            elapsed = (time.perf_counter() - start) * 1000.0
-            times.append(elapsed)
         except Exception:
-            elapsed = (time.perf_counter() - start) * 1000.0
-            times.append(elapsed)
+            pass
+        elapsed = (time.perf_counter() - start) * 1000.0
+        times.append(elapsed)
+
     if not times:
         return None
     return sum(times) / len(times)
 
 
+
+def measure_dns_latency_multi(domains, server, count):
+    """
+    Measure a DNS server against multiple domains and return a single average.
+
+    This keeps the existing DB/UI model simple: one value per DNS server per
+    probe timestamp, while allowing multiple DNS target domains to contribute.
+    """
+    times = []
+    for domain in domains:
+        latency = measure_dns_latency(domain, server, count)
+        if latency is not None:
+            times.append(latency)
+
+    if not times:
+        return None
+    return sum(times) / len(times)
+
+
+
 def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
-    """
-    Internet Quality Score:
-      - normalize each metric vs threshold,
-      - weight them,
-      - subtract from 1, scale to 0–100.
-    """
+    """Compute the 0-100 internet quality score."""
 
     def eval_metric(value, threshold):
         if threshold <= 0:
             return 0.0
-        r = value / threshold
-        return 1.0 if r >= 1.0 else r
+        ratio = value / threshold
+        return 1.0 if ratio >= 1.0 else ratio
 
     e_loss = eval_metric(avg_loss, THRESHOLD_LOSS)
     e_lat = eval_metric(avg_latency, THRESHOLD_LATENCY)
@@ -553,6 +675,24 @@ def compute_score(avg_loss, avg_latency, avg_jitter, avg_dns):
     return raw * 100.0
 
 
+
+def parse_speedtest_server_id(raw_value):
+    """
+    Normalize an optional speedtest server ID.
+
+    The env or request value may come in as an int-like string. Empty values
+    return None so the default automatic server selection is used.
+    """
+    if raw_value is None:
+        return None
+    value = str(raw_value).strip()
+    if not value:
+        return None
+    if not value.isdigit():
+        raise ValueError("speedtest server ID must be numeric")
+    return value
+
+
 # -------------------------
 # Probe & speedtest loops
 # -------------------------
@@ -561,54 +701,85 @@ last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
 
 
-def run_speedtest_internal():
-    logger.info("Starting speedtest run…")
+
+def run_speedtest_internal(requested_server_id=None):
+    """
+    Run a speedtest.
+
+    Priority:
+    1. explicit API/manual override
+    2. SPEEDTEST_SERVER environment variable
+    3. automatic best server selection
+    """
+    requested_server_id = parse_speedtest_server_id(
+        requested_server_id if requested_server_id is not None else SPEEDTEST_SERVER
+    )
+
+    logger.info("Starting speedtest run...")
     st = speedtest.Speedtest()
-    st.get_best_server()
+
+    if requested_server_id:
+        logger.info("Using requested speedtest server ID: %s", requested_server_id)
+        st.get_servers([int(requested_server_id)])
+        st.get_best_server()
+    else:
+        st.get_best_server()
+
     down_bps = st.download()
     up_bps = st.upload()
     res = st.results.dict()
+
     ping_ms = res.get("ping")
     download_mbps = down_bps / (1024 * 1024)
     upload_mbps = up_bps / (1024 * 1024)
     server = res.get("server", {}) or {}
     ts = int(time.time())
+
     insert_speedtest(
         ts,
         ping_ms,
         download_mbps,
         upload_mbps,
         server,
+        requested_server_id=requested_server_id,
     )
+
     logger.info(
-        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s",
+        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s requested_server_id=%s",
         ping_ms,
         download_mbps,
         upload_mbps,
         server.get("name"),
+        requested_server_id or "auto",
     )
+
     return {
         "timestamp": ts,
         "ping_ms": ping_ms,
         "download_mbps": download_mbps,
         "upload_mbps": upload_mbps,
         "server": server,
+        "requested_server_id": requested_server_id,
     }
+
 
 
 def run_speedtest_if_due():
     global last_speedtest_ts
     if not SPEEDTEST_ENABLED:
         return
+
     now = time.time()
     with last_speedtest_lock:
         if now - last_speedtest_ts < SPEEDTEST_INTERVAL:
             return
         last_speedtest_ts = now
+
     try:
         run_speedtest_internal()
-    except Exception as e:
-        logger.error("Periodic speedtest failed: %s", e)
+    except Exception as exc:
+        logger.error("Periodic speedtest failed: %s", exc)
+
 
 
 def probe_loop():
@@ -625,7 +796,7 @@ def probe_loop():
             ping_targets.append(ROUTER_IP)
         ping_targets.extend(SITES)
 
-        ping_results = [run_ping(h, PING_COUNT) for h in ping_targets]
+        ping_results = [run_ping(host, PING_COUNT) for host in ping_targets]
 
         latencies = [r["latency"] for r in ping_results]
         jitters = [r["jitter"] for r in ping_results]
@@ -639,10 +810,14 @@ def probe_loop():
         dns_times = []
         dns_per_server = {}
         for server_ip in DNS_SERVERS:
-            t = measure_dns_latency(DNS_TEST_SITE, server_ip, count=3)
-            if t is not None:
-                dns_times.append(t)
-                dns_per_server[server_ip] = t
+            measured = measure_dns_latency_multi(
+                DNS_TEST_SITES,
+                server_ip,
+                count=3,
+            )
+            if measured is not None:
+                dns_times.append(measured)
+                dns_per_server[server_ip] = measured
 
         avg_dns = statistics.mean(dns_times) if dns_times else 0.0
 
@@ -695,20 +870,20 @@ def api_recent():
         limit = 2880
 
     rows = fetch_recent(limit)
-    ts_list = [r[0] for r in rows]
+    ts_list = [row[0] for row in rows]
     dns_detail_map = fetch_dns_for_timestamps(ts_list)
 
     data = []
-    for r in rows:
-        ts = r[0]
+    for row in rows:
+        ts = row[0]
         item = {
             "ts": ts,
             "iso": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
-            "avg_latency_ms": r[1],
-            "avg_jitter_ms": r[2],
-            "avg_loss_pct": r[3],
-            "avg_dns_latency_ms": r[4],
-            "score": r[5],
+            "avg_latency_ms": row[1],
+            "avg_jitter_ms": row[2],
+            "avg_loss_pct": row[3],
+            "avg_dns_latency_ms": row[4],
+            "score": row[5],
         }
         if ts in dns_detail_map:
             item["dns_per_server"] = dns_detail_map[ts]
@@ -722,6 +897,7 @@ def api_latest():
     row = fetch_latest()
     if not row:
         return jsonify(data=None)
+
     ts = row[0]
     data = {
         "ts": ts,
@@ -746,6 +922,7 @@ def api_config():
         router_ip=ROUTER_IP or None,
         sites=SITES,
         dns_test_site=DNS_TEST_SITE,
+        dns_test_sites=DNS_TEST_SITES,
         dns_servers=DNS_SERVERS,
         dns_servers_detail=DNS_SERVERS_DETAIL,
         weight_loss=WEIGHT_LOSS,
@@ -758,6 +935,7 @@ def api_config():
         threshold_dns_latency=THRESHOLD_DNS_LATENCY,
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
+        speedtest_server=SPEEDTEST_SERVER or None,
         db_engine=DB_ENGINE,
     )
 
@@ -768,19 +946,22 @@ def api_speedtest_history():
         limit = int(request.args.get("limit", "100"))
     except ValueError:
         limit = 100
+
     rows = fetch_speedtests(limit)
     tests = [
         {
-            "ts": r[0],
-            "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
-            "ping_ms": r[1],
-            "download_mbps": r[2],
-            "upload_mbps": r[3],
-            "server_name": r[4],
-            "server_host": r[5],
-            "server_country": r[6],
+            "ts": row[0],
+            "iso": datetime.fromtimestamp(row[0], timezone.utc).isoformat(),
+            "ping_ms": row[1],
+            "download_mbps": row[2],
+            "upload_mbps": row[3],
+            "server_id": row[4],
+            "server_name": row[5],
+            "server_host": row[6],
+            "server_country": row[7],
+            "requested_server_id": row[8],
         }
-        for r in rows
+        for row in rows
     ]
     return jsonify(tests=tests)
 
@@ -790,18 +971,20 @@ def api_speedtest_latest():
     row = fetch_latest_speedtest()
     if not row:
         return jsonify(result=None)
-    r = row
+
     data = {
-        "ts": r[0],
-        "iso": datetime.fromtimestamp(r[0], timezone.utc).isoformat(),
-        "ping_ms": r[1],
-        "download_mbps": r[2],
-        "upload_mbps": r[3],
+        "ts": row[0],
+        "iso": datetime.fromtimestamp(row[0], timezone.utc).isoformat(),
+        "ping_ms": row[1],
+        "download_mbps": row[2],
+        "upload_mbps": row[3],
         "server": {
-            "name": r[4],
-            "host": r[5],
-            "country": r[6],
+            "id": row[4],
+            "name": row[5],
+            "host": row[6],
+            "country": row[7],
         },
+        "requested_server_id": row[8],
     }
     return jsonify(result=data)
 
@@ -809,25 +992,30 @@ def api_speedtest_latest():
 @app.route("/api/speedtest/run", methods=["POST"])
 def api_speedtest_run():
     try:
-        result = run_speedtest_internal()
+        payload = request.get_json(silent=True) or {}
+        requested_server_id = payload.get("server_id")
+        result = run_speedtest_internal(requested_server_id=requested_server_id)
         return jsonify(success=True, result=result)
-    except Exception as e:
-        logger.error("Manual speedtest failed: %s", e)
-        return jsonify(success=False, error=str(e)), 500
+    except Exception as exc:
+        logger.error("Manual speedtest failed: %s", exc)
+        return jsonify(success=False, error=str(exc)), 500
+
 
 
 def start_background_thread():
-    t = threading.Thread(target=probe_loop, daemon=True)
-    t.start()
+    thread = threading.Thread(target=probe_loop, daemon=True)
+    thread.start()
 
 
-# Start probe loop when imported (gunicorn worker start)
+# Start probe loop when imported (for gunicorn worker start).
 ensure_db()
+ensure_speedtests_schema()
 start_background_thread()
 
 
+
 def main():
-    # For local dev only
+    # For local development only.
     app.run(host="0.0.0.0", port=WEB_PORT)
 
 
