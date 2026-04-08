@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import statistics
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, render_template, request
@@ -27,6 +28,70 @@ if not logger.handlers:
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
     logger.setLevel(logging.INFO)
+
+
+# -------------------------
+# In-memory live log buffer
+# -------------------------
+#
+# The app already writes human-readable probe and speedtest lines to stdout.
+# We keep a rolling in-memory copy as well so the web UI can "tail" recent
+# activity without changing the Docker logging driver or shelling out to
+# docker logs from inside the container.
+LOG_BUFFER_MAX_LINES = 1000
+LOG_BUFFER = deque(maxlen=LOG_BUFFER_MAX_LINES)
+LOG_BUFFER_LOCK = threading.Lock()
+LOG_SEQUENCE = 0
+
+
+class InMemoryLogHandler(logging.Handler):
+    def emit(self, record):
+        global LOG_SEQUENCE
+        try:
+            line = self.format(record)
+        except Exception:
+            line = record.getMessage()
+        with LOG_BUFFER_LOCK:
+            LOG_SEQUENCE += 1
+            LOG_BUFFER.append({"seq": LOG_SEQUENCE, "line": line})
+
+
+live_log_handler = InMemoryLogHandler()
+live_log_handler.setLevel(logging.INFO)
+live_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logging.getLogger().addHandler(live_log_handler)
+
+
+def get_live_logs(since_seq=0, limit=250):
+    """
+    Return buffered log lines newer than the provided sequence number.
+
+    The caller passes the last seen sequence number and gets back only the new
+    lines plus the newest sequence marker to continue tailing from the UI.
+    """
+    try:
+        since_seq = int(since_seq)
+    except (TypeError, ValueError):
+        since_seq = 0
+
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 250
+
+    limit = max(1, min(limit, LOG_BUFFER_MAX_LINES))
+
+    with LOG_BUFFER_LOCK:
+        lines = [entry for entry in LOG_BUFFER if entry["seq"] > since_seq]
+        if len(lines) > limit:
+            lines = lines[-limit:]
+        next_seq = LOG_SEQUENCE
+
+    return {
+        "lines": [entry["line"] for entry in lines],
+        "next_seq": next_seq,
+        "buffer_size": LOG_BUFFER_MAX_LINES,
+    }
 
 
 # -------------------------
@@ -146,6 +211,9 @@ SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 # Optional preferred speedtest server.
 # Accept a numeric server ID as used by speedtest-cli / speedtest.net.
 SPEEDTEST_SERVER = os.getenv("SPEEDTEST_SERVER", "").strip()
+
+# Browser log-tail polling interval. This only affects the UI refresh cadence.
+LIVE_LOG_POLL_SECONDS = int(os.getenv("LIVE_LOG_POLL_SECONDS", "2"))
 
 logger.info(
     "Netprobe 2.0 starting with PROBE_INTERVAL=%ss, PING_COUNT=%s",
@@ -936,6 +1004,7 @@ def api_config():
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
         speedtest_server=SPEEDTEST_SERVER or None,
+        live_log_poll_seconds=LIVE_LOG_POLL_SECONDS,
         db_engine=DB_ENGINE,
     )
 
@@ -999,6 +1068,21 @@ def api_speedtest_run():
     except Exception as exc:
         logger.error("Manual speedtest failed: %s", exc)
         return jsonify(success=False, error=str(exc)), 500
+
+
+
+@app.route("/api/logs/live")
+def api_logs_live():
+    """
+    Return recent in-memory log lines for the browser log tail panel.
+
+    Query parameters:
+    - since: last seen sequence number
+    - limit: maximum number of lines to return
+    """
+    since = request.args.get("since", "0")
+    limit = request.args.get("limit", "250")
+    return jsonify(get_live_logs(since_seq=since, limit=limit))
 
 
 
