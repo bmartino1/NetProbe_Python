@@ -4,7 +4,8 @@
 // 1. Preserve the existing probe, DNS, and speedtest history dashboards.
 // 2. Show fuller date + time labels so month/day context is visible.
 // 3. Support multi-domain DNS targets from DNS_TEST_SITES.
-// 4. Let the user optionally override the speedtest server ID in the web UI.
+// 4. Let the user override the speedtest server, protocol, or force automatic
+//    selection for a one-off manual run.
 // 5. Provide a browser-based live log tail for probe/speedtest activity.
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -28,6 +29,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnClearLogs = document.getElementById("btnClearLogs");
 
   const speedtestServerInput = document.getElementById("speedtestServerInput");
+  const speedtestSecureCheckbox = document.getElementById(
+    "speedtestSecureCheckbox"
+  );
+  const speedtestForceAutoCheckbox = document.getElementById(
+    "speedtestForceAutoCheckbox"
+  );
   const logPanel = document.getElementById("logPanel");
   const logStatus = document.getElementById("logStatus");
   const liveLogOutput = document.getElementById("liveLogOutput");
@@ -429,6 +436,13 @@ document.addEventListener("DOMContentLoaded", () => {
       speedtestServerInput.value = cfg.speedtest_csv ? "" : cfg.speedtest_server || "";
     }
 
+    if (
+      speedtestSecureCheckbox &&
+      !speedtestSecureCheckbox.dataset.userEdited
+    ) {
+      speedtestSecureCheckbox.checked = cfg.speedtest_secure !== false;
+    }
+
     const lines = [];
     lines.push("== Probe Settings ==");
     lines.push(`DB engine: ${cfg.db_engine || "sqlite"}`);
@@ -495,6 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Speedtest ==");
     lines.push(`Enabled: ${cfg.speedtest_enabled}`);
     lines.push(`Interval: ${cfg.speedtest_interval}s`);
+    lines.push(`Secure / HTTPS: ${cfg.speedtest_secure !== false}`);
     lines.push(`Selection mode: ${cfg.speedtest_selection_mode || "auto"}`);
     lines.push(`Single server ID: ${cfg.speedtest_server || "not set"}`);
     lines.push(
@@ -531,6 +546,21 @@ document.addEventListener("DOMContentLoaded", () => {
       throw new Error("Speedtest server ID must be numeric");
     }
     return trimmed;
+  }
+
+  function formatSpeedtestFailure(message) {
+    const cleaned = String(message || "unknown error").trim() || "unknown error";
+    return [
+      `Speedtest failed: ${cleaned}`,
+      "",
+      "Reminder: HTTP and HTTPS can return different Speedtest server IDs. " +
+        "Toggle Secure / HTTPS or check Force auto and try again.",
+    ].join("\n");
+  }
+
+  function updateForceAutoControl() {
+    if (!speedtestServerInput || !speedtestForceAutoCheckbox) return;
+    speedtestServerInput.disabled = speedtestForceAutoCheckbox.checked;
   }
 
   async function refreshSpeedtestHistory() {
@@ -581,8 +611,15 @@ document.addEventListener("DOMContentLoaded", () => {
     speedtestSummary.textContent = "Speedtest: running...";
 
     let requestedServerId = null;
+    const forceAuto = Boolean(speedtestForceAutoCheckbox?.checked);
+    const secure = speedtestSecureCheckbox
+      ? Boolean(speedtestSecureCheckbox.checked)
+      : configCache?.speedtest_secure !== false;
+
     try {
-      requestedServerId = sanitizeServerId(speedtestServerInput?.value || "");
+      requestedServerId = forceAuto
+        ? null
+        : sanitizeServerId(speedtestServerInput?.value || "");
     } catch (err) {
       generalOutput.textContent = `Speedtest input error: ${err.message}`;
       speedtestSummary.textContent = "Speedtest: invalid server ID";
@@ -595,19 +632,32 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ server_id: requestedServerId }),
+        body: JSON.stringify({
+          server_id: requestedServerId,
+          secure,
+          force_auto: forceAuto,
+        }),
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        generalOutput.textContent = "Speedtest failed: " + (errText || res.status);
+        const bodyText = await res.text();
+        let errorMessage = bodyText || String(res.status);
+        try {
+          const errorJson = JSON.parse(bodyText);
+          errorMessage = errorJson.error || errorMessage;
+        } catch (_) {
+          // Keep the plain response text when the server did not return JSON.
+        }
+        generalOutput.textContent = formatSpeedtestFailure(errorMessage);
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
 
       const json = await res.json();
       if (!json.success) {
-        generalOutput.textContent = "Speedtest failed: " + (json.error || "unknown error");
+        generalOutput.textContent = formatSpeedtestFailure(
+          json.error || "unknown error"
+        );
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
@@ -619,7 +669,9 @@ document.addEventListener("DOMContentLoaded", () => {
         `Ping: ${r.ping_ms?.toFixed(1)} ms`,
         `Download: ${r.download_mbps?.toFixed(2)} Mbps`,
         `Upload: ${r.upload_mbps?.toFixed(2)} Mbps`,
+        `Protocol: ${r.secure ? "HTTPS / secure" : "HTTP / non-secure"}`,
         `Selection mode: ${r.selection_mode || "auto"}`,
+        `Forced automatic selection: ${r.forced_auto ? "yes" : "no"}`,
         `Requested server ID(s): ${r.requested_server_id || "auto"}`,
         `Excluded server ID(s): ${
           Array.isArray(r.excluded_server_ids) && r.excluded_server_ids.length
@@ -645,7 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshSpeedtestSummaryOnce();
       refreshLiveLogs(true);
     } catch (err) {
-      generalOutput.textContent = "Speedtest error: " + err;
+      generalOutput.textContent = formatSpeedtestFailure(err);
       speedtestSummary.textContent = "Speedtest: error";
     }
   }
@@ -816,6 +868,14 @@ document.addEventListener("DOMContentLoaded", () => {
       speedtestServerInput.dataset.userEdited = "true";
     });
   }
+
+  speedtestSecureCheckbox?.addEventListener("change", () => {
+    speedtestSecureCheckbox.dataset.userEdited = "true";
+  });
+  speedtestForceAutoCheckbox?.addEventListener("change", () => {
+    updateForceAutoControl();
+  });
+  updateForceAutoControl();
 
   btnShowConfig?.addEventListener("click", () => {
     showConfig();
