@@ -117,6 +117,46 @@ def parse_csv_env(name, default=""):
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def parse_speedtest_server_list(raw_value, variable_name, allow_count_prefix=False):
+    """
+    Parse a comma-separated list of numeric Speedtest server IDs.
+
+    ``SPEEDTEST_CSV_SERVERS`` also accepts the counted format requested for
+    Docker/Unraid templates. For example, ``2,12345,23456`` declares two
+    server IDs. A plain list such as ``12345,23456`` remains valid as well.
+
+    Duplicate IDs are removed while preserving the configured order.
+    """
+    if raw_value is None:
+        return []
+
+    raw_items = [item.strip() for item in str(raw_value).split(",") if item.strip()]
+    if not raw_items:
+        return []
+
+    for item in raw_items:
+        if not item.isdigit():
+            raise ValueError(
+                f"{variable_name} must contain only comma-separated numeric server IDs"
+            )
+
+    server_ids = raw_items
+    if allow_count_prefix and len(raw_items) >= 2:
+        declared_count = int(raw_items[0])
+        if declared_count == len(raw_items) - 1:
+            server_ids = raw_items[1:]
+
+    unique_ids = []
+    seen = set()
+    for server_id in server_ids:
+        normalized = str(int(server_id))
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_ids.append(normalized)
+
+    return unique_ids
+
+
 # -------------------------
 # Config from environment
 # -------------------------
@@ -211,6 +251,25 @@ SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 # Empty / unset means automatic server selection.
 SPEEDTEST_SERVER = os.getenv("SPEEDTEST_SERVER", "").strip()
 
+# Optional multi-server pool. When enabled, this takes precedence over the
+# legacy SPEEDTEST_SERVER value. SPEEDTEST_CSV_SERVERS accepts either a plain
+# list (12345,23456) or a counted list (2,12345,23456).
+SPEEDTEST_CSV = parse_bool_env("SPEEDTEST_CSV", default=False)
+SPEEDTEST_CSV_SERVERS_RAW = os.getenv("SPEEDTEST_CSV_SERVERS", "").strip()
+SPEEDTEST_CSV_SERVERS = parse_speedtest_server_list(
+    SPEEDTEST_CSV_SERVERS_RAW,
+    "SPEEDTEST_CSV_SERVERS",
+    allow_count_prefix=True,
+)
+
+# Global exclusion list applied to automatic, single-server, CSV-pool, and
+# one-off manual tests.
+SPEEDTEST_EXCLUDE_RAW = os.getenv("SPEEDTEST_EXCLUDE", "").strip()
+SPEEDTEST_EXCLUDE = parse_speedtest_server_list(
+    SPEEDTEST_EXCLUDE_RAW,
+    "SPEEDTEST_EXCLUDE",
+)
+
 # Browser log-tail polling interval. This only affects the UI refresh cadence.
 # Invalid or missing values fall back to 2 seconds.
 try:
@@ -231,10 +290,19 @@ logger.info(
     ", ".join(DNS_SERVERS) or "(none)",
     ", ".join(DNS_TEST_SITES) or "(none)",
 )
-if SPEEDTEST_SERVER:
-    logger.info("Preferred speedtest server ID: %s", SPEEDTEST_SERVER)
+if SPEEDTEST_CSV:
+    logger.info(
+        "Preferred speedtest selection: CSV pool (%s)",
+        ", ".join(SPEEDTEST_CSV_SERVERS) or "empty",
+    )
+elif SPEEDTEST_SERVER:
+    logger.info("Preferred speedtest selection: server ID %s", SPEEDTEST_SERVER)
 else:
-    logger.info("Preferred speedtest server ID: auto")
+    logger.info("Preferred speedtest selection: auto")
+logger.info(
+    "Excluded speedtest server IDs: %s",
+    ", ".join(SPEEDTEST_EXCLUDE) or "none",
+)
 logger.info("Live log poll interval: %ss", LIVE_LOG_POLL_SECONDS)
 
 
@@ -747,7 +815,55 @@ def parse_speedtest_server_id(raw_value):
         return None
     if not value.isdigit():
         raise ValueError("speedtest server ID must be numeric")
-    return value
+    return str(int(value))
+
+
+def resolve_speedtest_selection(requested_server_id=None):
+    """
+    Resolve the effective Speedtest server selection.
+
+    Priority:
+    1. A non-empty one-off API/manual server ID.
+    2. SPEEDTEST_CSV=true with SPEEDTEST_CSV_SERVERS.
+    3. Legacy SPEEDTEST_SERVER.
+    4. Automatic server selection.
+
+    SPEEDTEST_EXCLUDE is global and applies to every mode.
+    """
+    manual_server_id = parse_speedtest_server_id(requested_server_id)
+
+    if manual_server_id:
+        mode = "manual"
+        server_ids = [manual_server_id]
+    elif SPEEDTEST_CSV:
+        if not SPEEDTEST_CSV_SERVERS:
+            raise ValueError(
+                "SPEEDTEST_CSV is true but SPEEDTEST_CSV_SERVERS is empty"
+            )
+        mode = "csv"
+        server_ids = list(SPEEDTEST_CSV_SERVERS)
+    else:
+        configured_server_id = parse_speedtest_server_id(SPEEDTEST_SERVER)
+        if configured_server_id:
+            mode = "single"
+            server_ids = [configured_server_id]
+        else:
+            mode = "auto"
+            server_ids = []
+
+    excluded_ids = list(SPEEDTEST_EXCLUDE)
+    conflicts = sorted(set(server_ids).intersection(excluded_ids), key=int)
+    if conflicts:
+        raise ValueError(
+            "Speedtest server ID(s) are both selected and excluded: "
+            + ",".join(conflicts)
+        )
+
+    return {
+        "mode": mode,
+        "server_ids": server_ids,
+        "excluded_ids": excluded_ids,
+    }
 
 
 # -------------------------
@@ -762,24 +878,37 @@ def run_speedtest_internal(requested_server_id=None):
     """
     Run a speedtest.
 
-    Priority:
-    1. explicit API/manual override
-    2. SPEEDTEST_SERVER environment variable
-    3. automatic best server selection
+    Selection priority is handled by resolve_speedtest_selection().
     """
-    requested_server_id = parse_speedtest_server_id(
-        requested_server_id if requested_server_id is not None else SPEEDTEST_SERVER
-    )
+    selection = resolve_speedtest_selection(requested_server_id)
+    selection_mode = selection["mode"]
+    requested_server_ids = selection["server_ids"]
+    excluded_server_ids = selection["excluded_ids"]
+    requested_server_value = ",".join(requested_server_ids) or None
 
     logger.info("Starting speedtest run...")
     st = speedtest.Speedtest()
 
-    if requested_server_id:
-        logger.info("Using requested speedtest server ID: %s", requested_server_id)
-        st.get_servers([int(requested_server_id)])
-        st.get_best_server()
-    else:
-        st.get_best_server()
+    logger.info(
+        "Speedtest selection: mode=%s requested=%s excluded=%s",
+        selection_mode,
+        requested_server_value or "auto",
+        ",".join(excluded_server_ids) or "none",
+    )
+
+    server_filter = [int(server_id) for server_id in requested_server_ids]
+    exclude_filter = [int(server_id) for server_id in excluded_server_ids]
+
+    # Calling get_servers explicitly lets us apply the same filters exposed by
+    # speedtest-cli's repeatable --server and --exclude options. If no filters
+    # are configured, get_best_server() retains the original automatic path.
+    if server_filter or exclude_filter:
+        st.get_servers(
+            servers=server_filter or None,
+            exclude=exclude_filter or None,
+        )
+
+    st.get_best_server()
 
     down_bps = st.download()
     up_bps = st.upload()
@@ -797,16 +926,18 @@ def run_speedtest_internal(requested_server_id=None):
         download_mbps,
         upload_mbps,
         server,
-        requested_server_id=requested_server_id,
+        requested_server_id=requested_server_value,
     )
 
     logger.info(
-        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s requested_server_id=%s",
+        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s selection_mode=%s requested_server_ids=%s excluded_server_ids=%s",
         ping_ms,
         download_mbps,
         upload_mbps,
         server.get("name"),
-        requested_server_id or "auto",
+        selection_mode,
+        requested_server_value or "auto",
+        ",".join(excluded_server_ids) or "none",
     )
 
     return {
@@ -815,7 +946,12 @@ def run_speedtest_internal(requested_server_id=None):
         "download_mbps": download_mbps,
         "upload_mbps": upload_mbps,
         "server": server,
-        "requested_server_id": requested_server_id,
+        # Keep the singular field for backward compatibility. In CSV mode it
+        # contains the comma-separated candidate pool.
+        "requested_server_id": requested_server_value,
+        "requested_server_ids": requested_server_ids,
+        "selection_mode": selection_mode,
+        "excluded_server_ids": excluded_server_ids,
     }
 
 
@@ -990,6 +1126,12 @@ def api_config():
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
         speedtest_server=SPEEDTEST_SERVER or None,
+        speedtest_csv=SPEEDTEST_CSV,
+        speedtest_csv_servers=SPEEDTEST_CSV_SERVERS,
+        speedtest_exclude=SPEEDTEST_EXCLUDE,
+        speedtest_selection_mode=(
+            "csv" if SPEEDTEST_CSV else "single" if SPEEDTEST_SERVER else "auto"
+        ),
         live_log_poll_seconds=LIVE_LOG_POLL_SECONDS,
         db_engine=DB_ENGINE,
     )
@@ -1015,6 +1157,7 @@ def api_speedtest_history():
             "server_host": row[6],
             "server_country": row[7],
             "requested_server_id": row[8],
+            "requested_server_ids": row[8].split(",") if row[8] else [],
         }
         for row in rows
     ]
@@ -1040,6 +1183,7 @@ def api_speedtest_latest():
             "country": row[7],
         },
         "requested_server_id": row[8],
+        "requested_server_ids": row[8].split(",") if row[8] else [],
     }
     return jsonify(result=data)
 
