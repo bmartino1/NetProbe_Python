@@ -340,7 +340,8 @@ SPEEDTEST_CSV=True
 SPEEDTEST_CSV_SERVERS=2,12345,23456
 SPEEDTEST_EXCLUDE=46408
 ```
-
+* meaning set the number of servers and comma-separate the speedtest id
+  
 The plain CSV form is also accepted:
 
 ```env
