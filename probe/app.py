@@ -106,6 +106,22 @@ def parse_bool_env(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def parse_optional_bool(value, variable_name):
+    """Parse an optional bool supplied by JSON, form data, or environment-like text."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+
+    normalized = str(value).strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True
+    if normalized in ("0", "false", "no", "off"):
+        return False
+
+    raise ValueError(f"{variable_name} must be true or false")
+
+
 def parse_csv_env(name, default=""):
     """
     Parse a comma-separated environment variable into a clean list.
@@ -247,6 +263,10 @@ THRESHOLD_DNS_LATENCY = float(os.getenv("THRESHOLD_DNS_LATENCY", "100"))
 SPEEDTEST_ENABLED = parse_bool_env("SPEEDTEST_ENABLED", default=True)
 SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 
+# Use HTTPS when communicating with speedtest.net. HTTP and HTTPS can return
+# different server lists, so this is configurable for Docker/Unraid users.
+SPEEDTEST_SECURE = parse_bool_env("SPEEDTEST_SECURE", default=True)
+
 # Optional preferred speedtest server.
 # Empty / unset means automatic server selection.
 SPEEDTEST_SERVER = os.getenv("SPEEDTEST_SERVER", "").strip()
@@ -302,6 +322,10 @@ else:
 logger.info(
     "Excluded speedtest server IDs: %s",
     ", ".join(SPEEDTEST_EXCLUDE) or "none",
+)
+logger.info(
+    "Speedtest protocol: %s",
+    "HTTPS (secure)" if SPEEDTEST_SECURE else "HTTP (non-secure)",
 )
 logger.info("Live log poll interval: %ss", LIVE_LOG_POLL_SECONDS)
 
@@ -818,21 +842,26 @@ def parse_speedtest_server_id(raw_value):
     return str(int(value))
 
 
-def resolve_speedtest_selection(requested_server_id=None):
+def resolve_speedtest_selection(requested_server_id=None, force_auto=False):
     """
     Resolve the effective Speedtest server selection.
 
     Priority:
-    1. A non-empty one-off API/manual server ID.
-    2. SPEEDTEST_CSV=true with SPEEDTEST_CSV_SERVERS.
-    3. Legacy SPEEDTEST_SERVER.
-    4. Automatic server selection.
+    1. A one-off API/manual force-auto request.
+    2. A non-empty one-off API/manual server ID.
+    3. SPEEDTEST_CSV=true with SPEEDTEST_CSV_SERVERS.
+    4. Legacy SPEEDTEST_SERVER.
+    5. Automatic server selection.
 
     SPEEDTEST_EXCLUDE is global and applies to every mode.
     """
+    force_auto = bool(force_auto)
     manual_server_id = parse_speedtest_server_id(requested_server_id)
 
-    if manual_server_id:
+    if force_auto:
+        mode = "auto"
+        server_ids = []
+    elif manual_server_id:
         mode = "manual"
         server_ids = [manual_server_id]
     elif SPEEDTEST_CSV:
@@ -863,7 +892,38 @@ def resolve_speedtest_selection(requested_server_id=None):
         "mode": mode,
         "server_ids": server_ids,
         "excluded_ids": excluded_ids,
+        "forced_auto": force_auto,
     }
+
+
+class SpeedtestRunError(RuntimeError):
+    """A Speedtest failure rewritten into a useful message for the UI/API."""
+
+
+def format_speedtest_error(exc, selection, secure):
+    """Return a useful error even when speedtest-cli raises an empty exception."""
+    exception_name = type(exc).__name__
+    exception_text = str(exc).strip()
+    protocol = "HTTPS/secure" if secure else "HTTP/non-secure"
+    requested = ",".join(selection.get("server_ids", [])) or "automatic selection"
+
+    if exception_name == "NoMatchedServers":
+        return (
+            f"No matching Speedtest server was found for {requested} using {protocol}. "
+            "Speedtest server IDs can differ between HTTP and HTTPS lists. "
+            "Toggle Secure / HTTPS, verify the ID with speedtest-cli, or use "
+            "Force auto selection."
+        )
+
+    if exception_text:
+        detail = f"{exception_name}: {exception_text}"
+    else:
+        detail = exception_name
+
+    return (
+        f"{detail}. The selected Speedtest server may be unavailable. "
+        "Try toggling Secure / HTTPS or use Force auto selection."
+    )
 
 
 # -------------------------
@@ -874,45 +934,60 @@ last_speedtest_ts = 0
 last_speedtest_lock = threading.Lock()
 
 
-def run_speedtest_internal(requested_server_id=None):
+def run_speedtest_internal(requested_server_id=None, secure=None, force_auto=False):
     """
     Run a speedtest.
 
     Selection priority is handled by resolve_speedtest_selection().
     """
-    selection = resolve_speedtest_selection(requested_server_id)
+    secure_override = parse_optional_bool(secure, "secure")
+    secure_mode = SPEEDTEST_SECURE if secure_override is None else secure_override
+    force_auto_value = parse_optional_bool(force_auto, "force_auto")
+    force_auto_mode = bool(force_auto_value) if force_auto_value is not None else False
+
+    selection = resolve_speedtest_selection(
+        requested_server_id,
+        force_auto=force_auto_mode,
+    )
     selection_mode = selection["mode"]
     requested_server_ids = selection["server_ids"]
     excluded_server_ids = selection["excluded_ids"]
     requested_server_value = ",".join(requested_server_ids) or None
 
     logger.info("Starting speedtest run...")
-    st = speedtest.Speedtest()
-
     logger.info(
-        "Speedtest selection: mode=%s requested=%s excluded=%s",
+        "Speedtest selection: protocol=%s mode=%s requested=%s excluded=%s forced_auto=%s",
+        "https" if secure_mode else "http",
         selection_mode,
         requested_server_value or "auto",
         ",".join(excluded_server_ids) or "none",
+        selection["forced_auto"],
     )
 
-    server_filter = [int(server_id) for server_id in requested_server_ids]
-    exclude_filter = [int(server_id) for server_id in excluded_server_ids]
+    try:
+        st = speedtest.Speedtest(secure=secure_mode)
 
-    # Calling get_servers explicitly lets us apply the same filters exposed by
-    # speedtest-cli's repeatable --server and --exclude options. If no filters
-    # are configured, get_best_server() retains the original automatic path.
-    if server_filter or exclude_filter:
-        st.get_servers(
-            servers=server_filter or None,
-            exclude=exclude_filter or None,
-        )
+        server_filter = [int(server_id) for server_id in requested_server_ids]
+        exclude_filter = [int(server_id) for server_id in excluded_server_ids]
 
-    st.get_best_server()
+        # Calling get_servers explicitly lets us apply the same filters exposed by
+        # speedtest-cli's repeatable --server and --exclude options. If no filters
+        # are configured, get_best_server() retains the original automatic path.
+        if server_filter or exclude_filter:
+            st.get_servers(
+                servers=server_filter or None,
+                exclude=exclude_filter or None,
+            )
 
-    down_bps = st.download()
-    up_bps = st.upload()
-    res = st.results.dict()
+        st.get_best_server()
+
+        down_bps = st.download()
+        up_bps = st.upload()
+        res = st.results.dict()
+    except Exception as exc:
+        raise SpeedtestRunError(
+            format_speedtest_error(exc, selection, secure_mode)
+        ) from exc
 
     ping_ms = res.get("ping")
     download_mbps = down_bps / (1024 * 1024)
@@ -930,14 +1005,16 @@ def run_speedtest_internal(requested_server_id=None):
     )
 
     logger.info(
-        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s selection_mode=%s requested_server_ids=%s excluded_server_ids=%s",
+        "Speedtest: ping=%sms down=%.2fMbps up=%.2fMbps server=%s protocol=%s selection_mode=%s requested_server_ids=%s excluded_server_ids=%s forced_auto=%s",
         ping_ms,
         download_mbps,
         upload_mbps,
         server.get("name"),
+        "https" if secure_mode else "http",
         selection_mode,
         requested_server_value or "auto",
         ",".join(excluded_server_ids) or "none",
+        selection["forced_auto"],
     )
 
     return {
@@ -952,6 +1029,8 @@ def run_speedtest_internal(requested_server_id=None):
         "requested_server_ids": requested_server_ids,
         "selection_mode": selection_mode,
         "excluded_server_ids": excluded_server_ids,
+        "secure": secure_mode,
+        "forced_auto": selection["forced_auto"],
     }
 
 
@@ -969,7 +1048,7 @@ def run_speedtest_if_due():
     try:
         run_speedtest_internal()
     except Exception as exc:
-        logger.error("Periodic speedtest failed: %s", exc)
+        logger.exception("Periodic speedtest failed: %s", exc)
 
 
 def probe_loop():
@@ -1125,6 +1204,7 @@ def api_config():
         threshold_dns_latency=THRESHOLD_DNS_LATENCY,
         speedtest_enabled=SPEEDTEST_ENABLED,
         speedtest_interval=SPEEDTEST_INTERVAL,
+        speedtest_secure=SPEEDTEST_SECURE,
         speedtest_server=SPEEDTEST_SERVER or None,
         speedtest_csv=SPEEDTEST_CSV,
         speedtest_csv_servers=SPEEDTEST_CSV_SERVERS,
@@ -1193,11 +1273,18 @@ def api_speedtest_run():
     try:
         payload = request.get_json(silent=True) or {}
         requested_server_id = payload.get("server_id")
-        result = run_speedtest_internal(requested_server_id=requested_server_id)
+        secure = payload.get("secure")
+        force_auto = payload.get("force_auto", False)
+        result = run_speedtest_internal(
+            requested_server_id=requested_server_id,
+            secure=secure,
+            force_auto=force_auto,
+        )
         return jsonify(success=True, result=result)
     except Exception as exc:
-        logger.error("Manual speedtest failed: %s", exc)
-        return jsonify(success=False, error=str(exc)), 500
+        error_message = str(exc).strip() or type(exc).__name__
+        logger.exception("Manual speedtest failed: %s", error_message)
+        return jsonify(success=False, error=error_message), 500
 
 
 @app.route("/api/logs/live")
