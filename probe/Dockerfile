@@ -11,6 +11,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
   && rm -rf /var/lib/apt/lists/*
 
+# Optional Debian speedtest-cli package:
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     speedtest-cli \
+#   && rm -rf /var/lib/apt/lists/*
+#
+# NetProbe currently uses the Python speedtest-cli package installed through
+# requirements.txt. That package provides both:
+#   1. The Python module used by app.py: import speedtest
+#   2. The speedtest-cli command-line utility
+#
+# Installing the Debian package is therefore not required and would create a
+# Second system-level copy separate from the Python virtual environment.
+
 WORKDIR /app
 
 RUN python -m venv /opt/venv
