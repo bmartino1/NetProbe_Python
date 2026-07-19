@@ -15,6 +15,23 @@ The goal is a simple “drop in and forget it” quality monitor that you can
 run on Unraid, Proxmox, Docker, etc.
 
 ---
+## Screenshots
+Config and live data
+<img width="1692" height="761" alt="image" src="https://github.com/user-attachments/assets/8692ef0d-5ab3-4663-83e1-82cac8502c3e" />
+Internet Quality Score
+<img width="1690" height="896" alt="image" src="https://github.com/user-attachments/assets/df1bbcad-aa2f-4182-ae4a-4b8c02d83249" />
+Packet Loss (Avg)
+<img width="1689" height="880" alt="image" src="https://github.com/user-attachments/assets/8105d9ad-dc49-4358-8be9-05679924f6db" />
+Latency to Anchors (Avg)
+<img width="1694" height="887" alt="image" src="https://github.com/user-attachments/assets/02b9afa7-badf-494d-8366-a78a9dddc2bc" />
+Jitter (Avg)
+<img width="1696" height="893" alt="image" src="https://github.com/user-attachments/assets/46ebbc41-370b-493b-8d4a-5ced3f44a41c" />
+DNS Response Time (Avg)
+<img width="1690" height="931" alt="image" src="https://github.com/user-attachments/assets/1a24db04-73c0-458a-97c1-e33902f4d586" />
+Internet Bandwidth (Speedtest)
+<img width="1700" height="923" alt="image" src="https://github.com/user-attachments/assets/e2f2a88e-3731-4e03-971f-ebe2b4daf357" />
+
+
 
 ## Features
 
