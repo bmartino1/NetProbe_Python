@@ -424,7 +424,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (speedtestServerInput && !speedtestServerInput.dataset.userEdited) {
-      speedtestServerInput.value = cfg.speedtest_server || "";
+      // CSV mode is configured by environment. Keep the one-off manual field
+      // blank so a click uses the configured pool instead of overriding it.
+      speedtestServerInput.value = cfg.speedtest_csv ? "" : cfg.speedtest_server || "";
     }
 
     const lines = [];
@@ -493,7 +495,22 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Speedtest ==");
     lines.push(`Enabled: ${cfg.speedtest_enabled}`);
     lines.push(`Interval: ${cfg.speedtest_interval}s`);
-    lines.push(`Requested server ID: ${cfg.speedtest_server || "auto"}`);
+    lines.push(`Selection mode: ${cfg.speedtest_selection_mode || "auto"}`);
+    lines.push(`Single server ID: ${cfg.speedtest_server || "not set"}`);
+    lines.push(
+      `CSV server pool: ${
+        Array.isArray(cfg.speedtest_csv_servers) && cfg.speedtest_csv_servers.length
+          ? cfg.speedtest_csv_servers.join(", ")
+          : "not set"
+      }`
+    );
+    lines.push(
+      `Excluded server IDs: ${
+        Array.isArray(cfg.speedtest_exclude) && cfg.speedtest_exclude.length
+          ? cfg.speedtest_exclude.join(", ")
+          : "none"
+      }`
+    );
     lines.push("");
 
     lines.push("== Live Log Viewer ==");
@@ -602,7 +619,13 @@ document.addEventListener("DOMContentLoaded", () => {
         `Ping: ${r.ping_ms?.toFixed(1)} ms`,
         `Download: ${r.download_mbps?.toFixed(2)} Mbps`,
         `Upload: ${r.upload_mbps?.toFixed(2)} Mbps`,
-        `Requested server ID: ${r.requested_server_id || "auto"}`,
+        `Selection mode: ${r.selection_mode || "auto"}`,
+        `Requested server ID(s): ${r.requested_server_id || "auto"}`,
+        `Excluded server ID(s): ${
+          Array.isArray(r.excluded_server_ids) && r.excluded_server_ids.length
+            ? r.excluded_server_ids.join(", ")
+            : "none"
+        }`,
       ];
 
       if (r.server) {
