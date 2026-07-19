@@ -91,6 +91,14 @@ services:
       # Speedtest configuration
       SPEEDTEST_ENABLED: ${SPEEDTEST_ENABLED:-True}
       SPEEDTEST_INTERVAL: ${SPEEDTEST_INTERVAL:-14400}
+      # Legacy single-server mode. Leave blank for automatic selection.
+      SPEEDTEST_SERVER: ${SPEEDTEST_SERVER:-}
+      # Multi-server CSV pool. When true, this takes priority over
+      # SPEEDTEST_SERVER. Supports: 2,12345,23456 or 12345,23456
+      SPEEDTEST_CSV: ${SPEEDTEST_CSV:-False}
+      SPEEDTEST_CSV_SERVERS: ${SPEEDTEST_CSV_SERVERS:-}
+      # Comma-separated global exclusion list.
+      SPEEDTEST_EXCLUDE: ${SPEEDTEST_EXCLUDE:-}
 
     ports:
       - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
