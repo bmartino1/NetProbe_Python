@@ -38,6 +38,8 @@ run on Unraid, Proxmox, Docker, etc.
 - **Speedtest integration**
   - Automatic periodic runs (`SPEEDTEST_INTERVAL`).
   - “Run Speedtest Now” button in UI.
+  - Automatic, single-server, or multi-server CSV-pool selection.
+  - Global server exclusion list.
   - Last result summary in the top status bar.
   - Download / upload charts.
 
@@ -142,6 +144,10 @@ services:
 
       SPEEDTEST_ENABLED: "True"
       SPEEDTEST_INTERVAL: 14400   # 4 hours
+      SPEEDTEST_SERVER: ""        # optional legacy single-server ID
+      SPEEDTEST_CSV: "False"      # true = use SPEEDTEST_CSV_SERVERS
+      SPEEDTEST_CSV_SERVERS: ""   # example: 2,12345,23456
+      SPEEDTEST_EXCLUDE: ""       # example: 46408,4392
       APP_TIMEZONE: UTC
 
     ports:
@@ -194,6 +200,9 @@ volumes:
 | `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                   |
 | `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                         |
 | `SPEEDTEST_SERVER`        | `""`                                         | Optional Speedtest server ID. Leave blank to use automatic server selection.  |
+| `SPEEDTEST_CSV`           | `False`                                      | When true, use the multi-server CSV pool instead of `SPEEDTEST_SERVER`.       |
+| `SPEEDTEST_CSV_SERVERS`   | `""`                                         | Candidate server pool. Accepts `12345,23456`.                                 |
+| `SPEEDTEST_EXCLUDE`       | `""`                                         | Comma-separated server IDs excluded from every Speedtest selection mode.      |
 | `LIVE_LOG_POLL_SECONDS`   | `2`                                          | Seconds between live log viewer refreshes in the web UI.                      |
 
 You can also put these in `config.env` and uncomment `env_file` in the
@@ -226,14 +235,15 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
   - DNS test site
   - `dns_servers_detail` – list of `{ name, ip }`
   - weights / thresholds
-  - speedtest settings.
+  - speedtest mode, candidate pool, and exclusions.
 
 - `GET /api/speedtest/history?limit=N`  
   Speedtest history, newest → oldest, each with:
   - `ts`, `iso`
   - `ping_ms`
   - `download_mbps`, `upload_mbps`
-  - `server_name`, `server_host`, `server_country`.
+  - `server_id`, `server_name`, `server_host`, `server_country`
+  - `requested_server_id` and `requested_server_ids`.
 
 - `GET /api/speedtest/latest`  
   Most recent speedtest result.
@@ -248,13 +258,19 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
       "ping_ms": 6.1,
       "download_mbps": 100.0,
       "upload_mbps": 20.0,
+      "selection_mode": "csv",
+      "requested_server_id": "12345,23456",
+      "requested_server_ids": ["12345", "23456"],
+      "excluded_server_ids": ["46408"],
       "server": {
+        "id": "23456",
         "name": "Example ISP",
         "host": "speed.example.com",
         "country": "US"
       }
     }
   }
+  ```
 
 ---
 
@@ -285,6 +301,55 @@ In this example, the server IDs are:
 - `34567`
 
 You can then use one of those IDs with Netprobe. 
+
+### Speedtest server-selection modes
+
+Netprobe resolves the server mode in this order:
+
+1. A server ID typed into the web UI for a one-off manual run.
+2. `SPEEDTEST_CSV=True` and the IDs in `SPEEDTEST_CSV_SERVERS`.
+3. The legacy single ID in `SPEEDTEST_SERVER`.
+4. Automatic best-server selection.
+
+`SPEEDTEST_EXCLUDE` is applied in every mode. If an ID is both selected and
+excluded, the test stops with a clear configuration error instead of silently
+using a different server.
+
+#### Automatic selection with exclusions
+
+```env
+SPEEDTEST_CSV=False
+SPEEDTEST_SERVER=
+SPEEDTEST_EXCLUDE=46408,4392
+```
+
+#### Force one server
+
+```env
+SPEEDTEST_CSV=False
+SPEEDTEST_SERVER=12345
+SPEEDTEST_EXCLUDE=
+```
+
+#### Use a fallback pool of servers
+
+The counted CSV format starts with the number of server IDs:
+
+```env
+SPEEDTEST_CSV=True
+SPEEDTEST_CSV_SERVERS=2,12345,23456
+SPEEDTEST_EXCLUDE=46408
+```
+
+The plain CSV form is also accepted:
+
+```env
+SPEEDTEST_CSV_SERVERS=12345,23456
+```
+
+The Speedtest library retrieves the configured candidates and tests latency to
+the available matches before selecting the best one. This avoids repeatedly
+running `speedtest-cli --list`, which may be rate-limited if called too often.
 
 ## Troubleshooting
 
