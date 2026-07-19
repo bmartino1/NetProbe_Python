@@ -55,8 +55,10 @@ Internet Bandwidth (Speedtest)
 - **Speedtest integration**
   - Automatic periodic runs (`SPEEDTEST_INTERVAL`).
   - “Run Speedtest Now” button in UI.
+  - Selectable HTTPS/secure or HTTP/non-secure server discovery.
   - Automatic, single-server, or multi-server CSV-pool selection.
   - Global server exclusion list.
+  - One-off manual “Force auto” control and friendly server-list mismatch errors.
   - Last result summary in the top status bar.
   - Download / upload charts.
 
@@ -161,6 +163,7 @@ services:
 
       SPEEDTEST_ENABLED: "True"
       SPEEDTEST_INTERVAL: 14400   # 4 hours
+      SPEEDTEST_SECURE: "True"    # true = HTTPS list; false = HTTP list
       SPEEDTEST_SERVER: ""        # optional legacy single-server ID
       SPEEDTEST_CSV: "False"      # true = use SPEEDTEST_CSV_SERVERS
       SPEEDTEST_CSV_SERVERS: ""   # example: 2,12345,23456
@@ -216,6 +219,7 @@ volumes:
 | `THRESHOLD_DNS_LATENCY`   | `100`                                        | DNS ms considered “max bad”.                                                  |
 | `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                   |
 | `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                         |
+| `SPEEDTEST_SECURE`        | `True`                                       | Use HTTPS/secure Speedtest discovery. HTTP and HTTPS can return different IDs. |
 | `SPEEDTEST_SERVER`        | `""`                                         | Optional Speedtest server ID. Leave blank to use automatic server selection.  |
 | `SPEEDTEST_CSV`           | `False`                                      | When true, use the multi-server CSV pool instead of `SPEEDTEST_SERVER`.       |
 | `SPEEDTEST_CSV_SERVERS`   | `""`                                         | Candidate server pool. Accepts `12345,23456`.                                 |
@@ -323,10 +327,17 @@ You can then use one of those IDs with Netprobe.
 
 Netprobe resolves the server mode in this order:
 
-1. A server ID typed into the web UI for a one-off manual run.
-2. `SPEEDTEST_CSV=True` and the IDs in `SPEEDTEST_CSV_SERVERS`.
-3. The legacy single ID in `SPEEDTEST_SERVER`.
-4. Automatic best-server selection.
+1. “Force auto” checked in the web UI for a one-off automatic run.
+2. A server ID typed into the web UI for a one-off manual run.
+3. `SPEEDTEST_CSV=True` and the IDs in `SPEEDTEST_CSV_SERVERS`.
+4. The legacy single ID in `SPEEDTEST_SERVER`.
+5. Automatic best-server selection.
+
+`SPEEDTEST_SECURE=True` uses the HTTPS/secure server list. Set it to `False`
+to use the legacy HTTP list. These lists can contain different server IDs. The
+web UI has a **Secure / HTTPS** checkbox that overrides this setting for a
+single manual run, plus **Force auto** to ignore the configured server or pool
+for that one run.
 
 `SPEEDTEST_EXCLUDE` is applied in every mode. If an ID is both selected and
 excluded, the test stops with a clear configuration error instead of silently
