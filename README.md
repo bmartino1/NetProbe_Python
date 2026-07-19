@@ -17,7 +17,7 @@ run on Unraid, Proxmox, Docker, etc.
 ---
 ## Screenshots
 Config and live data
-<img width="1692" height="761" alt="image" src="https://github.com/user-attachments/assets/8692ef0d-5ab3-4663-83e1-82cac8502c3e" />
+<img width="1678" height="736" alt="image" src="https://github.com/user-attachments/assets/b12ef95f-902e-469c-9b0d-6b40ef64ccfd" />
 Internet Quality Score
 <img width="1690" height="896" alt="image" src="https://github.com/user-attachments/assets/df1bbcad-aa2f-4182-ae4a-4b8c02d83249" />
 Packet Loss (Avg)
