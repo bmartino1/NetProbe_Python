@@ -320,7 +320,9 @@ In this example, the server IDs are:
 - `12345`
 - `23456`
 - `34567`
-
+  
+* Exaggerated examples, they may not be real server IDs
+  
 You can then use one of those IDs with Netprobe. 
 
 ### Speedtest server-selection modes
@@ -350,7 +352,8 @@ SPEEDTEST_CSV=False
 SPEEDTEST_SERVER=
 SPEEDTEST_EXCLUDE=46408,4392
 ```
-
+* Exaggerated examples, they may not be real server IDs
+* 
 #### Force one server
 
 ```env
@@ -358,7 +361,8 @@ SPEEDTEST_CSV=False
 SPEEDTEST_SERVER=12345
 SPEEDTEST_EXCLUDE=
 ```
-
+* Exaggerated examples, they may not be real server IDs
+* 
 #### Use a fallback pool of servers
 
 The counted CSV format starts with the number of server IDs:
@@ -369,13 +373,15 @@ SPEEDTEST_CSV_SERVERS=2,12345,23456
 SPEEDTEST_EXCLUDE=46408
 ```
 * meaning set the number of servers and comma-separate the speedtest id
+* Exaggerated examples, they may not be real server IDs
   
 The plain CSV form is also accepted:
 
 ```env
 SPEEDTEST_CSV_SERVERS=12345,23456
 ```
-
+* Exaggerated examples, they may not be real server IDs
+  
 The Speedtest library retrieves the configured candidates and tests latency to
 the available matches before selecting the best one. This avoids repeatedly
 running `speedtest-cli --list`, which may be rate-limited if called too often.
@@ -384,7 +390,7 @@ running `speedtest-cli --list`, which may be rate-limited if called too often.
 
 ### Charts all show 100% loss / very high latency
 
-- Let it run for 5 min... internet average takes time to build per defualt weights...
+- Let it run for 5 min... internet average takes time to build per default weights...
 - Ensure the container has the needed capabilities:
   - `NET_RAW`, `NET_ADMIN`, `SYS_ADMIN`
 - From the host, verify basic connectivity from inside the container:
