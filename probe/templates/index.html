@@ -179,6 +179,25 @@
         padding: 6px 10px;
         min-width: 180px;
       }
+      .compact-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 7px;
+        border: 1px solid #333;
+        border-radius: 6px;
+        background: #141414;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .compact-checkbox input {
+        margin: 0;
+      }
+      .input-control:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
       .log-panel {
         background: #141414;
         border-radius: 8px;
@@ -232,6 +251,20 @@
               inputmode="numeric"
               placeholder="Speedtest server ID (auto)"
             />
+            <label
+              class="compact-checkbox"
+              title="Use HTTPS when retrieving and testing Speedtest servers. HTTP and HTTPS may return different server IDs."
+            >
+              <input type="checkbox" id="speedtestSecureCheckbox" checked />
+              Secure / HTTPS
+            </label>
+            <label
+              class="compact-checkbox"
+              title="Ignore the configured single server or CSV pool for this one manual run and use automatic server selection. Global exclusions still apply."
+            >
+              <input type="checkbox" id="speedtestForceAutoCheckbox" />
+              Force auto
+            </label>
             <button class="btn" id="btnRunSpeedtest">
               Run Speedtest Now
             </button>
