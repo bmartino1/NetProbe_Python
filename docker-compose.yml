@@ -91,6 +91,9 @@ services:
       # Speedtest configuration
       SPEEDTEST_ENABLED: ${SPEEDTEST_ENABLED:-True}
       SPEEDTEST_INTERVAL: ${SPEEDTEST_INTERVAL:-14400}
+      # True uses HTTPS/secure server discovery; False uses legacy HTTP.
+      # The two protocols may return different server ID lists.
+      SPEEDTEST_SECURE: ${SPEEDTEST_SECURE:-True}
       # Legacy single-server mode. Leave blank for automatic selection.
       SPEEDTEST_SERVER: ${SPEEDTEST_SERVER:-}
       # Multi-server CSV pool. When true, this takes priority over
