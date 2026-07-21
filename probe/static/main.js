@@ -4,8 +4,8 @@
 // 1. Preserve the existing probe, DNS, and speedtest history dashboards.
 // 2. Show fuller date + time labels so month/day context is visible.
 // 3. Support multi-domain DNS targets from DNS_TEST_SITES.
-// 4. Let the user override the speedtest server, protocol, or force automatic
-//    selection for a one-off manual run.
+// 4. Let the user override the speedtest backend, server, protocol, or force
+//    automatic selection for a one-off manual run.
 // 5. Provide a browser-based live log tail for probe/speedtest activity.
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -28,12 +28,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnRefreshLogs = document.getElementById("btnRefreshLogs");
   const btnClearLogs = document.getElementById("btnClearLogs");
 
+  const speedtestBackendSelect = document.getElementById("speedtestBackendSelect");
   const speedtestServerInput = document.getElementById("speedtestServerInput");
   const speedtestSecureCheckbox = document.getElementById(
     "speedtestSecureCheckbox"
   );
   const speedtestForceAutoCheckbox = document.getElementById(
     "speedtestForceAutoCheckbox"
+  );
+  const speedtestBackendNotice = document.getElementById(
+    "speedtestBackendNotice"
+  );
+  const ooklaInstallStatus = document.getElementById("ooklaInstallStatus");
+  const ooklaAcceptanceStatus = document.getElementById(
+    "ooklaAcceptanceStatus"
   );
   const logPanel = document.getElementById("logPanel");
   const logStatus = document.getElementById("logStatus");
@@ -430,6 +438,10 @@ document.addEventListener("DOMContentLoaded", () => {
       liveLogPollMs = cfg.live_log_poll_seconds * 1000;
     }
 
+    if (speedtestBackendSelect && !speedtestBackendSelect.dataset.userEdited) {
+      speedtestBackendSelect.value = cfg.speedtest_backend || "python";
+    }
+
     if (speedtestServerInput && !speedtestServerInput.dataset.userEdited) {
       // CSV mode is configured by environment. Keep the one-off manual field
       // blank so a click uses the configured pool instead of overriding it.
@@ -442,6 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ) {
       speedtestSecureCheckbox.checked = cfg.speedtest_secure !== false;
     }
+    updateBackendControls();
 
     const lines = [];
     lines.push("== Probe Settings ==");
@@ -509,7 +522,39 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.push("== Speedtest ==");
     lines.push(`Enabled: ${cfg.speedtest_enabled}`);
     lines.push(`Interval: ${cfg.speedtest_interval}s`);
-    lines.push(`Secure / HTTPS: ${cfg.speedtest_secure !== false}`);
+    lines.push(`Backend: ${cfg.speedtest_backend || "python"}`);
+    if ((cfg.speedtest_backend || "python") === "ookla") {
+      lines.push(
+        `Ookla CLI installed: ${Boolean(cfg.speedtest_ookla_installed)}`
+      );
+      lines.push(
+        `Ookla EULA / Terms / Privacy acknowledged: ${Boolean(
+          cfg.speedtest_ookla_accept_license
+        )}`
+      );
+      lines.push(
+        `Ookla acknowledgement source: ${
+          cfg.speedtest_ookla_acceptance_source || "none"
+        }`
+      );
+      lines.push(
+        `Ookla acknowledgement file: ${
+          cfg.speedtest_ookla_acceptance_file || "/data/ookla-eula-accepted.txt"
+        }`
+      );
+      if (cfg.speedtest_ookla_terms) {
+        lines.push(`Ookla EULA: ${cfg.speedtest_ookla_terms.eula}`);
+        lines.push(`Ookla Terms: ${cfg.speedtest_ookla_terms.terms}`);
+        lines.push(`Ookla Privacy: ${cfg.speedtest_ookla_terms.privacy}`);
+      }
+    } else {
+      lines.push(
+        `Secure / HTTPS (Python backend): ${cfg.speedtest_secure !== false}`
+      );
+      lines.push(
+        `Optional Ookla backend installed: ${Boolean(cfg.speedtest_ookla_installed)}`
+      );
+    }
     lines.push(`Selection mode: ${cfg.speedtest_selection_mode || "auto"}`);
     lines.push(`Single server ID: ${cfg.speedtest_server || "not set"}`);
     lines.push(
@@ -548,14 +593,47 @@ document.addEventListener("DOMContentLoaded", () => {
     return trimmed;
   }
 
-  function formatSpeedtestFailure(message) {
+  function formatSpeedtestFailure(message, backend = "python") {
     const cleaned = String(message || "unknown error").trim() || "unknown error";
-    return [
-      `Speedtest failed: ${cleaned}`,
-      "",
-      "Reminder: HTTP and HTTPS can return different Speedtest server IDs. " +
-        "Toggle Secure / HTTPS or check Force auto and try again.",
-    ].join("\n");
+    const reminder =
+      backend === "ookla"
+        ? "Reminder: verify the official Ookla CLI is installed. After reviewing " +
+          "Ookla's EULA, Terms of Use, and Privacy Policy, set " +
+          "SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT or run " +
+          "netprobe-ookla-accept interactively; otherwise choose the Python backend."
+        : "Reminder: HTTP and HTTPS can return different Speedtest server IDs. " +
+          "Toggle Secure / HTTPS or check Force auto and try again.";
+    return [`Speedtest failed: ${cleaned}`, "", reminder].join("\n");
+  }
+
+  function selectedSpeedtestBackend() {
+    return speedtestBackendSelect?.value || configCache?.speedtest_backend || "python";
+  }
+
+  function updateBackendControls() {
+    const backend = selectedSpeedtestBackend();
+    const isOokla = backend === "ookla";
+
+    if (speedtestSecureCheckbox) {
+      speedtestSecureCheckbox.disabled = isOokla;
+      speedtestSecureCheckbox.title = isOokla
+        ? "The official Ookla backend uses its native protocol; this setting only applies to the Python backend."
+        : "Use HTTPS for the Python speedtest-cli backend. HTTP and HTTPS may return different server IDs.";
+    }
+
+    if (speedtestBackendNotice) {
+      speedtestBackendNotice.hidden = !isOokla;
+    }
+    if (ooklaInstallStatus) {
+      ooklaInstallStatus.textContent = configCache?.speedtest_ookla_installed
+        ? "CLI installed"
+        : "CLI not installed";
+    }
+    if (ooklaAcceptanceStatus) {
+      ooklaAcceptanceStatus.textContent = configCache?.speedtest_ookla_accept_license
+        ? `terms acknowledged via ${configCache?.speedtest_ookla_acceptance_source || "runtime setting"}`
+        : "terms not acknowledged";
+    }
   }
 
   function updateForceAutoControl() {
@@ -599,8 +677,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (r.server?.country) serverBits.push(r.server.country);
       const serverText = serverBits.length ? ` via ${serverBits.join(", ")}` : "";
       const requestedText = r.requested_server_id ? ` [requested ${r.requested_server_id}]` : "";
+      const backendText = r.backend ? ` [${r.backend}]` : "";
 
-      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(1)}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(1)} ms)${serverText}${requestedText}`;
+      speedtestSummary.textContent = `Speedtest: ${r.download_mbps?.toFixed(1)}↓ / ${r.upload_mbps?.toFixed(1)}↑ Mbps (ping ${r.ping_ms?.toFixed(1)} ms)${serverText}${requestedText}${backendText}`;
     } catch (_) {
       // Ignore summary refresh errors so the rest of the dashboard keeps working.
     }
@@ -611,6 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
     speedtestSummary.textContent = "Speedtest: running...";
 
     let requestedServerId = null;
+    const backend = selectedSpeedtestBackend();
     const forceAuto = Boolean(speedtestForceAutoCheckbox?.checked);
     const secure = speedtestSecureCheckbox
       ? Boolean(speedtestSecureCheckbox.checked)
@@ -633,6 +713,7 @@ document.addEventListener("DOMContentLoaded", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          backend,
           server_id: requestedServerId,
           secure,
           force_auto: forceAuto,
@@ -648,7 +729,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (_) {
           // Keep the plain response text when the server did not return JSON.
         }
-        generalOutput.textContent = formatSpeedtestFailure(errorMessage);
+        generalOutput.textContent = formatSpeedtestFailure(errorMessage, backend);
         speedtestSummary.textContent = "Speedtest: failed";
         return;
       }
@@ -656,7 +737,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const json = await res.json();
       if (!json.success) {
         generalOutput.textContent = formatSpeedtestFailure(
-          json.error || "unknown error"
+          json.error || "unknown error",
+          backend
         );
         speedtestSummary.textContent = "Speedtest: failed";
         return;
@@ -669,7 +751,14 @@ document.addEventListener("DOMContentLoaded", () => {
         `Ping: ${r.ping_ms?.toFixed(1)} ms`,
         `Download: ${r.download_mbps?.toFixed(2)} Mbps`,
         `Upload: ${r.upload_mbps?.toFixed(2)} Mbps`,
-        `Protocol: ${r.secure ? "HTTPS / secure" : "HTTP / non-secure"}`,
+        `Backend: ${r.backend || backend}`,
+        `Protocol: ${
+          r.backend === "ookla"
+            ? "Ookla native"
+            : r.secure
+              ? "HTTPS / secure"
+              : "HTTP / non-secure"
+        }`,
         `Selection mode: ${r.selection_mode || "auto"}`,
         `Forced automatic selection: ${r.forced_auto ? "yes" : "no"}`,
         `Requested server ID(s): ${r.requested_server_id || "auto"}`,
@@ -679,6 +768,19 @@ document.addEventListener("DOMContentLoaded", () => {
             : "none"
         }`,
       ];
+
+      if (typeof r.jitter_ms === "number") {
+        textLines.push(`Jitter: ${r.jitter_ms.toFixed(1)} ms`);
+      }
+      if (typeof r.packet_loss_pct === "number") {
+        textLines.push(`Packet loss: ${r.packet_loss_pct.toFixed(2)}%`);
+      }
+      if (r.isp) {
+        textLines.push(`ISP: ${r.isp}`);
+      }
+      if (r.result_url) {
+        textLines.push(`Ookla result URL: ${r.result_url}`);
+      }
 
       if (r.server) {
         const serverDisplay = [
@@ -697,7 +799,7 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshSpeedtestSummaryOnce();
       refreshLiveLogs(true);
     } catch (err) {
-      generalOutput.textContent = formatSpeedtestFailure(err);
+      generalOutput.textContent = formatSpeedtestFailure(err, backend);
       speedtestSummary.textContent = "Speedtest: error";
     }
   }
@@ -863,6 +965,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  speedtestBackendSelect?.addEventListener("change", () => {
+    speedtestBackendSelect.dataset.userEdited = "true";
+    updateBackendControls();
+  });
+
   if (speedtestServerInput) {
     speedtestServerInput.addEventListener("input", () => {
       speedtestServerInput.dataset.userEdited = "true";
@@ -876,6 +983,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateForceAutoControl();
   });
   updateForceAutoControl();
+  updateBackendControls();
 
   btnShowConfig?.addEventListener("click", () => {
     showConfig();
