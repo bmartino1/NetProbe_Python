@@ -1,11 +1,11 @@
 # Netprobe 2.0 – Internet Quality Dashboard
 
 Netprobe 2.0 is a lightweight, container-friendly network probe and web UI for
-home / lab internet monitoring.
+home/lab internet monitoring.
 
 It periodically:
 
-- Pings your gateway, router and a list of “anchor” sites.
+- Pings your gateway, router, and a list of “anchor” sites.
 - Measures packet loss, latency and jitter.
 - Measures DNS lookup latency **per DNS server**.
 - Runs scheduled and manual Speedtest.net tests.
@@ -16,8 +16,14 @@ run on Unraid, Proxmox, Docker, etc.
 
 ---
 ## Screenshots
-Config and live data
-<img width="1678" height="736" alt="image" src="https://github.com/user-attachments/assets/b12ef95f-902e-469c-9b0d-6b40ef64ccfd" />
+Config and live data:
+
+* Python Default backend build and Docker Hub distributed image
+<img width="1704" height="399" alt="image" src="https://github.com/user-attachments/assets/9b3dd3ae-bee2-4f3f-9cf8-e5f0d249d65a" />
+
+* Ookla Backend Admin/User EULA must be accepted
+<img width="1687" height="444" alt="image" src="https://github.com/user-attachments/assets/38538c10-24b5-4b52-8927-fd140aefb070" />
+
 Internet Quality Score
 <img width="1690" height="896" alt="image" src="https://github.com/user-attachments/assets/df1bbcad-aa2f-4182-ae4a-4b8c02d83249" />
 Packet Loss (Avg)
@@ -36,14 +42,14 @@ Internet Bandwidth (Speedtest)
 ## Features
 
 - **Internet Quality Score (0–100)**
-  Weighted composite of loss, latency, jitter and DNS response time.
+  Weighted composite of loss, latency, jitter, and DNS response time.
 
 - **Per-metric panels**
   - Packet Loss
   - Latency to anchors
   - Jitter
   - DNS Response Time (with lines + checkboxes for each configured DNS server)
-  - Bandwidth (download / upload history from speedtest)
+  - Bandwidth (download/upload history from speedtest)
 
 - **History controls**
   Time selector on each chart (seconds → months).
@@ -61,7 +67,7 @@ Internet Bandwidth (Speedtest)
   - Global server exclusion list.
   - One-off manual “Force auto” control and friendly server-list mismatch errors.
   - Last result summary in the top status bar.
-  - Download / upload charts.
+  - Download/upload charts.
 
 - **SQLite storage**
   - `measurements` – aggregate probe results.
@@ -77,21 +83,21 @@ Internet Bandwidth (Speedtest)
 
 ## How it works
 
-Every `PROBE_INTERVAL` seconds the probe loop:
+Every `PROBE_INTERVAL` seconds, the probe loop:
 
 1. Detects the container’s default gateway.
 2. Pings:
    - Default gateway (inside Docker network)
    - Optional `ROUTER_IP` (your LAN router)
-   - Each hostname in `SITES`
-3. Computes average latency, jitter (max–min) and packet loss across all ping
+   - Each hostname in `SITES.`
+3. Computes average latency, jitter (max–min), and packet loss across all ping
    targets.
 4. For each configured DNS server (`DNS_NAMESERVER_X_IP`), it measures the
    time to resolve `DNS_TEST_SITE` several times and averages the result.
 5. Computes an **Internet Quality Score** using weighted, threshold-normalized
    metrics.
 6. Stores:
-   - Aggregate metrics in `measurements`
+   - Aggregate metrics in `measurements.`
    - Per-server DNS results in `dns_measurements`
 
 Separately, a periodic task runs `speedtest` when at least
@@ -191,7 +197,7 @@ volumes:
   netprobe_data:
 ```
 
-** Both Quick Starts use the sqlfile option for longterm persitent data... Postgres backend changeover is available via additional docker options later
+** Both Quick Starts use the sqlfile option for long-term persistent data... Postgres backend changeover is available via additional Docker options later
 
 ---
 ## Environment variables
@@ -244,7 +250,7 @@ Compose file.
 
 ## API code overview...
 
-The frontend uses these JSON endpoints (you can also query them yourself by calling the python venv...):
+The frontend uses these JSON endpoints (you can also query them yourself by calling the Python venv...):
 
 - `GET /` – main UI.
 - `GET /api/score/recent?limit=N`
@@ -266,7 +272,7 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
   - sites
   - DNS test site
   - `dns_servers_detail` – list of `{ name, ip }`
-  - weights / thresholds
+  - weights/thresholds
   - speedtest backend, mode, candidate pool, exclusions, and Ookla availability.
 
 - `GET /api/speedtest/history?limit=N`
@@ -380,8 +386,8 @@ SPEEDTEST_CSV=False
 SPEEDTEST_SERVER=
 SPEEDTEST_EXCLUDE=46408,4392
 ```
-* Exaggerated examples, they may not be real server IDs
-*
+* Exaggerated examples; they may not be real server IDs
+
 #### Force one server
 
 ```env
@@ -389,8 +395,8 @@ SPEEDTEST_CSV=False
 SPEEDTEST_SERVER=12345
 SPEEDTEST_EXCLUDE=
 ```
-* Exaggerated examples, they may not be real server IDs
-*
+* Exaggerated examples; they may not be real server IDs
+
 #### Use a fallback pool of servers
 
 The counted CSV format starts with the number of server IDs:
@@ -401,14 +407,14 @@ SPEEDTEST_CSV_SERVERS=2,12345,23456
 SPEEDTEST_EXCLUDE=46408
 ```
 * meaning set the number of servers and comma-separate the speedtest id
-* Exaggerated examples, they may not be real server IDs
+* Exaggerated examples; they may not be real server IDs
 
 The plain CSV form is also accepted:
 
 ```env
 SPEEDTEST_CSV_SERVERS=12345,23456
 ```
-* Exaggerated examples, they may not be real server IDs
+* Exaggerated examples; they may not be real server IDs
 
 With the Python backend, the library retrieves the configured candidates and
 tests latency to the available matches before selecting the best one. With the
@@ -535,7 +541,7 @@ notes.
   docker exec -it netprobe ping -c 3 8.8.8.8
   ```
 
-- If this fails, fix host networking / firewall before debugging Netprobe.
+- If this fails, fix host networking/firewall before debugging Netprobe.
 
 ---
 
