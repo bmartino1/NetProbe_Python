@@ -16,8 +16,14 @@ run on Unraid, Proxmox, Docker, etc.
 
 ---
 ## Screenshots
-Config and live data
-<img width="1678" height="736" alt="image" src="https://github.com/user-attachments/assets/b12ef95f-902e-469c-9b0d-6b40ef64ccfd" />
+Config and live data:
+
+* Python Default backend build and Docker Hub distrubuted image
+<img width="1704" height="399" alt="image" src="https://github.com/user-attachments/assets/9b3dd3ae-bee2-4f3f-9cf8-e5f0d249d65a" />
+
+* Ookla Backend Admin/User EULA must be accepted
+<img width="1687" height="444" alt="image" src="https://github.com/user-attachments/assets/38538c10-24b5-4b52-8927-fd140aefb070" />
+
 Internet Quality Score
 <img width="1690" height="896" alt="image" src="https://github.com/user-attachments/assets/df1bbcad-aa2f-4182-ae4a-4b8c02d83249" />
 Packet Loss (Avg)
