@@ -55,6 +55,19 @@
         gap: 8px;
         flex-wrap: wrap;
       }
+      .backend-notice {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid #5b4b21;
+        border-radius: 6px;
+        background: #211d12;
+        color: #f4e7b2;
+        font-size: 0.8rem;
+        line-height: 1.35;
+      }
+      .backend-notice a {
+        color: #93c5fd;
+      }
       button.btn {
         padding: 6px 10px;
         border-radius: 6px;
@@ -244,6 +257,15 @@
             <button class="btn secondary" id="btnShowConfig">
               Show Config / Env
             </button>
+            <select
+              class="input-control"
+              id="speedtestBackendSelect"
+              title="Choose the backend for this manual run. Scheduled tests use SPEEDTEST_BACKEND."
+              style="min-width: 155px"
+            >
+              <option value="python">Python (default)</option>
+              <option value="ookla">Ookla (official; EULA)</option>
+            </select>
             <input
               class="input-control"
               id="speedtestServerInput"
@@ -256,7 +278,7 @@
               title="Use HTTPS when retrieving and testing Speedtest servers. HTTP and HTTPS may return different server IDs."
             >
               <input type="checkbox" id="speedtestSecureCheckbox" checked />
-              Secure / HTTPS
+              Secure / HTTPS (Python)
             </label>
             <label
               class="compact-checkbox"
@@ -271,6 +293,17 @@
             <button class="btn secondary" id="btnToggleLogs">
               Follow Live Logs
             </button>
+            <div id="speedtestBackendNotice" class="backend-notice" hidden>
+              <strong>Official Ookla backend:</strong>
+              <span id="ooklaInstallStatus">CLI status unknown</span> ·
+              <span id="ooklaAcceptanceStatus">terms status unknown</span>.
+              Use requires acceptance of Ookla's
+              <a href="https://www.speedtest.net/about/eula" target="_blank" rel="noopener noreferrer">EULA</a>,
+              <a href="https://www.speedtest.net/about/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>, and
+              <a href="https://www.speedtest.net/about/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+              Acknowledge at runtime with <code>SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT</code>
+              or run <code>netprobe-ookla-accept</code> interactively inside the container.
+            </div>
           </div>
           <div class="status-info" id="speedtestSummary">
             Speedtest: not run yet
