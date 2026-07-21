@@ -1,7 +1,9 @@
 FROM python:3.14-slim
 
-# Local/private build option only. The default public-compatible image does not
-# contain the proprietary Ookla executable.
+# Optional local/private build shortcut. The default public image does not
+# contain the proprietary Ookla executable. End users can instead run
+# netprobe-ookla-accept after deployment to review the terms and install the
+# official package directly from Ookla into the running container.
 ARG INSTALL_OOKLA_SPEEDTEST=false
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -36,9 +38,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   /usr/bin/speedtest          -> official Ookla CLI, only in a local/private
 #                                  build made with INSTALL_OOKLA_SPEEDTEST=true
 #
-# The Docker build installs the optional package but NEVER runs speedtest or
-# pre-accepts its terms. End-user acknowledgement happens at container runtime
-# through SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT or the interactive helper.
+# The Docker build NEVER runs speedtest or pre-accepts its terms. With the
+# default build, the image contains only the acknowledgement/runtime installer
+# helper; the end user downloads the official package after deployment.
 # Neither method grants redistribution or commercial-use rights.
 
 WORKDIR /app

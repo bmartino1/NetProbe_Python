@@ -286,7 +286,8 @@ SPEEDTEST_INTERVAL = int(os.getenv("SPEEDTEST_INTERVAL", "14400"))
 
 # Backend selector:
 # - python: existing sivel/speedtest-cli Python library.
-# - ookla: official /usr/bin/speedtest CLI installed from Ookla's repository.
+# - ookla: official /usr/bin/speedtest CLI installed by the end user from
+#   Ookla's repository, or included in an explicitly requested private build.
 # The Python backend remains the default for backward compatibility.
 SPEEDTEST_BACKEND = normalize_speedtest_backend(
     os.getenv("SPEEDTEST_BACKEND", "python")
@@ -1053,8 +1054,9 @@ def require_ookla_ready():
     if not ookla_binary_available():
         raise SpeedtestRunError(
             f"The official Ookla Speedtest CLI was not found at "
-            f"{SPEEDTEST_OOKLA_PATH}. Build a private/local image with "
-            "INSTALL_OOKLA_SPEEDTEST=true or select the Python backend."
+            f"{SPEEDTEST_OOKLA_PATH}. After reviewing Ookla's terms, run "
+            "'docker exec -it <container> netprobe-ookla-accept' to "
+            "acknowledge and install it, or select the Python backend."
         )
 
     accepted, _source = ookla_acceptance_status()
