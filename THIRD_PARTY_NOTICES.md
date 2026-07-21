@@ -24,10 +24,13 @@ Official resources:
 - Privacy Policy: https://www.speedtest.net/about/privacy
 - CLI packages: https://packagecloud.io/ookla/speedtest-cli
 
-The default Docker build does not contain the official executable. A user may
-create a private local build with `INSTALL_OOKLA_SPEEDTEST=true`, subject to
-Ookla's terms. Do not publish or redistribute that derived image without
-separate permission allowing redistribution.
+The default Docker build does not contain the official executable. After
+reviewing and acknowledging the applicable terms, an end user may run
+`netprobe-ookla-accept` to download the official Debian package directly from
+Ookla's Packagecloud repository into that user's running container. A user may
+also create a private local build with `INSTALL_OOKLA_SPEEDTEST=true`, subject
+to Ookla's terms. Do not publish or redistribute an image containing the
+executable without separate permission allowing redistribution.
 
 The image build never pre-accepts the terms. NetProbe requires an explicit
 runtime acknowledgement before invoking the official backend:

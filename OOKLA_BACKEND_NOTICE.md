@@ -7,13 +7,15 @@ MIT License.
 ## Intended use and distribution boundary
 
 Ookla's package repository describes the CLI as being for personal,
-non-commercial use. NetProbe's optional Docker build path is therefore intended
-for a private local home-lab image. Do not publish or redistribute an image that
-contains the Ookla executable unless you have separate written permission from
-Ookla allowing that distribution.
+non-commercial use. The default NetProbe image therefore does not contain the
+Ookla executable. Instead, an end user may review the terms and use the bundled
+helper to download the official package directly from Ookla into that user's
+running container.
 
-The default build keeps `INSTALL_OOKLA_SPEEDTEST=false` and uses the
-redistributable Python backend.
+Do not publish or redistribute an image that contains the Ookla executable
+unless you have separate written permission from Ookla allowing that
+distribution. The default build keeps `INSTALL_OOKLA_SPEEDTEST=false` and uses
+the redistributable Python backend.
 
 ## End-user acknowledgement at runtime
 
@@ -40,26 +42,34 @@ The values `True`, `Yes`, `On`, and `1` remain accepted for compatibility with
 unreleased test configurations, but `I_ACCEPT` is the documented value because
 it makes the administrator's action explicit.
 
-### Interactive persistent acknowledgement
+### Interactive acknowledgement and installation
 
 ```bash
 docker exec -it <container-name> netprobe-ookla-accept
 ```
 
 The helper displays the official links and requires the user to type exactly
-`I ACCEPT`. It writes this marker by default:
+`I ACCEPT`. It writes the marker below and, when the official binary is missing,
+downloads and installs the Debian package directly from Ookla's Packagecloud
+repository into the running container:
 
 ```text
 /data/ookla-eula-accepted.txt
 ```
 
 Because `/data` is normally a persistent volume, the acknowledgement survives a
-container recreation. Check or remove it with:
+container recreation. Check, install again, or remove the acknowledgement with:
 
 ```bash
 docker exec <container-name> netprobe-ookla-accept --status
+docker exec <container-name> netprobe-ookla-accept --install
 docker exec <container-name> netprobe-ookla-accept --revoke
 ```
+
+The runtime-installed package is part of the container's writable layer and is
+removed by image updates or container recreation. The acknowledgement marker
+remains in `/data`, so rerunning the helper reinstalls the package without
+requiring a new acknowledgement.
 
 The location can be changed with:
 

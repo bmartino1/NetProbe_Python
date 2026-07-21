@@ -16,14 +16,8 @@ run on Unraid, Proxmox, Docker, etc.
 
 ---
 ## Screenshots
-Config and live data:
-
-* Python Default backend build and Docker Hub distrubuted image
-<img width="1704" height="399" alt="image" src="https://github.com/user-attachments/assets/9b3dd3ae-bee2-4f3f-9cf8-e5f0d249d65a" />
-
-* Ookla Backend Admin/User EULA must be accepted
-<img width="1687" height="444" alt="image" src="https://github.com/user-attachments/assets/38538c10-24b5-4b52-8927-fd140aefb070" />
-
+Config and live data
+<img width="1678" height="736" alt="image" src="https://github.com/user-attachments/assets/b12ef95f-902e-469c-9b0d-6b40ef64ccfd" />
 Internet Quality Score
 <img width="1690" height="896" alt="image" src="https://github.com/user-attachments/assets/df1bbcad-aa2f-4182-ae4a-4b8c02d83249" />
 Packet Loss (Avg)
@@ -234,7 +228,7 @@ volumes:
 | `SPEEDTEST_BACKEND`       | `python`                                     | `python` for the legacy Python client or `ookla` for the official CLI.        |
 | `SPEEDTEST_OOKLA_ACCEPT_LICENSE` | `""`                                | Runtime acknowledgement. Set `I_ACCEPT` only after the end user reviews Ookla's documents. |
 | `SPEEDTEST_OOKLA_ACCEPTANCE_FILE` | `/data/ookla-eula-accepted.txt`      | Persistent marker written by the interactive acknowledgement helper.          |
-| `SPEEDTEST_OOKLA_PATH`    | `/usr/bin/speedtest`                         | Path to the official Ookla CLI binary.                                        |
+| `SPEEDTEST_OOKLA_PATH`    | `/usr/bin/speedtest`                         | Path checked for the end-user-installed official Ookla CLI binary.             |
 | `SPEEDTEST_OOKLA_TIMEOUT` | `180`                                        | Timeout in seconds for an official Ookla CLI process.                         |
 | `SPEEDTEST_SECURE`        | `True`                                       | Python backend only: use HTTPS discovery; HTTP can return different IDs.      |
 | `SPEEDTEST_SERVER`        | `""`                                         | Optional Speedtest server ID. Leave blank to use automatic server selection.  |
@@ -387,7 +381,7 @@ SPEEDTEST_SERVER=
 SPEEDTEST_EXCLUDE=46408,4392
 ```
 * Exaggerated examples, they may not be real server IDs
-
+*
 #### Force one server
 
 ```env
@@ -396,7 +390,7 @@ SPEEDTEST_SERVER=12345
 SPEEDTEST_EXCLUDE=
 ```
 * Exaggerated examples, they may not be real server IDs
-
+*
 #### Use a fallback pool of servers
 
 The counted CSV format starts with the number of server IDs:
@@ -442,18 +436,54 @@ Non-interactive Unraid/Docker environment:
 SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT
 ```
 
-Interactive acknowledgement stored in the persistent `/data` volume:
+Interactive acknowledgement and end-user installation:
 
 ```bash
 docker exec -it netprobe netprobe-ookla-accept
 ```
 
 The helper displays the EULA, Terms, and Privacy links and requires the user to
-type `I ACCEPT`. NetProbe then passes the official CLI's `--accept-license` and
-`--accept-gdpr` flags when a test is actually run. The acknowledgement can be
-removed with `netprobe-ookla-accept --revoke`.
+type `I ACCEPT`. If `/usr/bin/speedtest` is missing, it then downloads and
+installs the official Debian package directly from Ookla's Packagecloud
+repository into the running container. The distributed NetProbe image does not
+contain the official binary.
+
+For a non-interactive deployment, set the acknowledgement variable and then run:
+
+```bash
+docker exec netprobe netprobe-ookla-accept --install
+```
+
+NetProbe passes the official CLI's `--accept-license` and `--accept-gdpr` flags
+when a test is actually run. The acknowledgement can be removed with
+`netprobe-ookla-accept --revoke`.
+
+Runtime-installed packages live in Docker's writable container layer. An image
+update or container recreation removes the Ookla package, while the acceptance
+marker remains under the persistent `/data` volume. Rerun
+`netprobe-ookla-accept` after an update when the UI reports that the CLI is
+missing.
 
 ## Enable the official Ookla backend
+
+### Recommended: install at runtime from the public image
+
+The normal public NetProbe image does not contain the official Ookla binary.
+After deploying it, the end user can review the terms and install directly from
+Ookla:
+
+```bash
+docker exec -it netprobe netprobe-ookla-accept
+```
+
+The helper can be checked or rerun with:
+
+```bash
+docker exec netprobe netprobe-ookla-accept --status
+docker exec netprobe netprobe-ookla-accept --install
+```
+
+### Optional private build with the package preinstalled
 
 The Dockerfile can install Ookla's official package on supported Debian
 architectures, but the build option defaults to `false`. This path is intended
