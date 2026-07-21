@@ -35,7 +35,7 @@ Internet Bandwidth (Speedtest)
 
 ## Features
 
-- **Internet Quality Score (0–100)**  
+- **Internet Quality Score (0–100)**
   Weighted composite of loss, latency, jitter and DNS response time.
 
 - **Per-metric panels**
@@ -45,17 +45,18 @@ Internet Bandwidth (Speedtest)
   - DNS Response Time (with lines + checkboxes for each configured DNS server)
   - Bandwidth (download / upload history from speedtest)
 
-- **History controls**  
+- **History controls**
   Time selector on each chart (seconds → months).
 
-- **Panel toggles**  
+- **Panel toggles**
   Checkboxes to show/hide sections (Internet Quality, Loss, Latency, Jitter,
   DNS, Bandwidth). Preference is saved in `localStorage` per browser.
 
 - **Speedtest integration**
   - Automatic periodic runs (`SPEEDTEST_INTERVAL`).
   - “Run Speedtest Now” button in UI.
-  - Selectable HTTPS/secure or HTTP/non-secure server discovery.
+  - Selectable backend: legacy Python `speedtest-cli` or official Ookla CLI.
+  - Selectable HTTPS/secure or HTTP/non-secure discovery for the Python backend.
   - Automatic, single-server, or multi-server CSV-pool selection.
   - Global server exclusion list.
   - One-off manual “Force auto” control and friendly server-list mismatch errors.
@@ -163,7 +164,12 @@ services:
 
       SPEEDTEST_ENABLED: "True"
       SPEEDTEST_INTERVAL: 14400   # 4 hours
-      SPEEDTEST_SECURE: "True"    # true = HTTPS list; false = HTTP list
+      SPEEDTEST_BACKEND: python   # python or ookla
+      # Required only when SPEEDTEST_BACKEND=ookla after reviewing and
+      # accepting Ookla's EULA, Terms of Use, and Privacy Policy:
+      SPEEDTEST_OOKLA_ACCEPT_LICENSE: ""  # set I_ACCEPT after review
+      SPEEDTEST_OOKLA_ACCEPTANCE_FILE: /data/ookla-eula-accepted.txt
+      SPEEDTEST_SECURE: "True"    # Python backend only: HTTPS vs HTTP list
       SPEEDTEST_SERVER: ""        # optional legacy single-server ID
       SPEEDTEST_CSV: "False"      # true = use SPEEDTEST_CSV_SERVERS
       SPEEDTEST_CSV_SERVERS: ""   # example: 2,12345,23456
@@ -219,10 +225,15 @@ volumes:
 | `THRESHOLD_DNS_LATENCY`   | `100`                                        | DNS ms considered “max bad”.                                                  |
 | `SPEEDTEST_ENABLED`       | `True`                                       | Enable periodic speedtests.                                                   |
 | `SPEEDTEST_INTERVAL`      | `14400`                                      | Seconds between automatic speedtests.                                         |
-| `SPEEDTEST_SECURE`        | `True`                                       | Use HTTPS/secure Speedtest discovery. HTTP and HTTPS can return different IDs. |
+| `SPEEDTEST_BACKEND`       | `python`                                     | `python` for the legacy Python client or `ookla` for the official CLI.        |
+| `SPEEDTEST_OOKLA_ACCEPT_LICENSE` | `""`                                | Runtime acknowledgement. Set `I_ACCEPT` only after the end user reviews Ookla's documents. |
+| `SPEEDTEST_OOKLA_ACCEPTANCE_FILE` | `/data/ookla-eula-accepted.txt`      | Persistent marker written by the interactive acknowledgement helper.          |
+| `SPEEDTEST_OOKLA_PATH`    | `/usr/bin/speedtest`                         | Path to the official Ookla CLI binary.                                        |
+| `SPEEDTEST_OOKLA_TIMEOUT` | `180`                                        | Timeout in seconds for an official Ookla CLI process.                         |
+| `SPEEDTEST_SECURE`        | `True`                                       | Python backend only: use HTTPS discovery; HTTP can return different IDs.      |
 | `SPEEDTEST_SERVER`        | `""`                                         | Optional Speedtest server ID. Leave blank to use automatic server selection.  |
 | `SPEEDTEST_CSV`           | `False`                                      | When true, use the multi-server CSV pool instead of `SPEEDTEST_SERVER`.       |
-| `SPEEDTEST_CSV_SERVERS`   | `""`                                         | Candidate server pool. Accepts `12345,23456`.                                 |
+| `SPEEDTEST_CSV_SERVERS`   | `""`                                         | Candidate server pool. Accepts `12345,23456` or `2,12345,23456`.              |
 | `SPEEDTEST_EXCLUDE`       | `""`                                         | Comma-separated server IDs excluded from every Speedtest selection mode.      |
 | `LIVE_LOG_POLL_SECONDS`   | `2`                                          | Seconds between live log viewer refreshes in the web UI.                      |
 
@@ -236,7 +247,7 @@ Compose file.
 The frontend uses these JSON endpoints (you can also query them yourself by calling the python venv...):
 
 - `GET /` – main UI.
-- `GET /api/score/recent?limit=N`  
+- `GET /api/score/recent?limit=N`
   Recent aggregate data. Each row includes:
   - `ts`, `iso`
   - `avg_latency_ms`, `avg_jitter_ms`, `avg_loss_pct`
@@ -244,10 +255,10 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
   - `score` (0–100)
   - `dns_per_server` – optional `{ "<dns_ip>": latency_ms }` map.
 
-- `GET /api/score/latest`  
+- `GET /api/score/latest`
   Most recent probe (same fields as above).
 
-- `GET /api/config`  
+- `GET /api/config`
   Effective configuration (after env overrides), including:
   - probe interval, ping count, timezone label
   - resolved gateway IP
@@ -256,20 +267,20 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
   - DNS test site
   - `dns_servers_detail` – list of `{ name, ip }`
   - weights / thresholds
-  - speedtest mode, candidate pool, and exclusions.
+  - speedtest backend, mode, candidate pool, exclusions, and Ookla availability.
 
-- `GET /api/speedtest/history?limit=N`  
+- `GET /api/speedtest/history?limit=N`
   Speedtest history, newest → oldest, each with:
   - `ts`, `iso`
   - `ping_ms`
   - `download_mbps`, `upload_mbps`
   - `server_id`, `server_name`, `server_host`, `server_country`
-  - `requested_server_id` and `requested_server_ids`.
+  - `requested_server_id`, `requested_server_ids`, and `backend`.
 
-- `GET /api/speedtest/latest`  
+- `GET /api/speedtest/latest`
   Most recent speedtest result.
 
-- `POST /api/speedtest/run`  
+- `POST /api/speedtest/run`
   Trigger an immediate speedtest. Returns:
   ```json
   {
@@ -279,6 +290,8 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
       "ping_ms": 6.1,
       "download_mbps": 100.0,
       "upload_mbps": 20.0,
+      "backend": "ookla",
+      "protocol": "ookla",
       "selection_mode": "csv",
       "requested_server_id": "12345,23456",
       "requested_server_ids": ["12345", "23456"],
@@ -297,35 +310,50 @@ The frontend uses these JSON endpoints (you can also query them yourself by call
 
 ## Find a Speedtest Server ID
 
-If you want to manually target a specific Speedtest server, you can list available server IDs from inside the running Netprobe container.
+NetProbe contains two different clients, and each client can expose a different
+server catalog.
 
-### Command
+### Python backend
 
 ```bash
-docker exec -it netprobe speedtest-cli --list
+docker exec -it netprobe speedtest-cli --secure --list
 ```
 
-This returns a list of nearby Speedtest servers with their numeric IDs.
+Use IDs from this list when `SPEEDTEST_BACKEND=python`. The Python client's HTTP
+and HTTPS catalogs may also differ, so match the list command to
+`SPEEDTEST_SECURE`.
 
-### Example output
+### Official Ookla backend
+
+```bash
+docker exec -it netprobe speedtest \
+  --accept-license \
+  --accept-gdpr \
+  --servers
+```
+
+Use IDs from this list when `SPEEDTEST_BACKEND=ookla`. Modern IDs obtained from
+Ookla web/embed configurations are more likely to work with this backend than
+with the archived Python client.
+
+The two binaries are intentionally separate:
 
 ```text
-12345) Example ISP - Chicago, IL (12.34 km)
-23456) Another ISP - Rockford, IL (88.12 km)
-34567) Test Provider - Milwaukee, WI (140.55 km)
+/opt/venv/bin/speedtest-cli   Python implementation
+/usr/bin/speedtest            Official Ookla CLI
 ```
 
-In this example, the server IDs are:
-
-- `12345`
-- `23456`
-- `34567`
-  
-* Exaggerated examples, they may not be real server IDs
-  
-You can then use one of those IDs with Netprobe. 
-
 ### Speedtest server-selection modes
+
+The web UI includes a backend selector for one-off manual tests. Scheduled tests
+use `SPEEDTEST_BACKEND`.
+
+- **Python backend:** preserves the existing secure/HTTP selector, native CSV
+  candidate filtering, and native exclusion filtering.
+- **Ookla backend:** uses Ookla's native protocol. The Secure / HTTPS checkbox
+  is disabled. Fixed IDs use `--server-id`. CSV mode tries official candidates
+  in nearest-list order and falls back through the configured IDs. Automatic
+  mode with exclusions selects the first allowed server from `speedtest --servers`.
 
 Netprobe resolves the server mode in this order:
 
@@ -335,11 +363,11 @@ Netprobe resolves the server mode in this order:
 4. The legacy single ID in `SPEEDTEST_SERVER`.
 5. Automatic best-server selection.
 
-`SPEEDTEST_SECURE=True` uses the HTTPS/secure server list. Set it to `False`
-to use the legacy HTTP list. These lists can contain different server IDs. The
-web UI has a **Secure / HTTPS** checkbox that overrides this setting for a
-single manual run, plus **Force auto** to ignore the configured server or pool
-for that one run.
+`SPEEDTEST_SECURE=True` applies only to the Python backend and uses its
+HTTPS/secure server list. Set it to `False` to use that client's legacy HTTP
+list. The official Ookla backend uses its native protocol and ignores this
+setting. The web UI can override the backend and Python protocol for a single
+manual run, plus **Force auto** can ignore the configured server or pool.
 
 `SPEEDTEST_EXCLUDE` is applied in every mode. If an ID is both selected and
 excluded, the test stops with a clear configuration error instead of silently
@@ -353,7 +381,7 @@ SPEEDTEST_SERVER=
 SPEEDTEST_EXCLUDE=46408,4392
 ```
 * Exaggerated examples, they may not be real server IDs
-* 
+*
 #### Force one server
 
 ```env
@@ -362,7 +390,7 @@ SPEEDTEST_SERVER=12345
 SPEEDTEST_EXCLUDE=
 ```
 * Exaggerated examples, they may not be real server IDs
-* 
+*
 #### Use a fallback pool of servers
 
 The counted CSV format starts with the number of server IDs:
@@ -374,17 +402,90 @@ SPEEDTEST_EXCLUDE=46408
 ```
 * meaning set the number of servers and comma-separate the speedtest id
 * Exaggerated examples, they may not be real server IDs
-  
+
 The plain CSV form is also accepted:
 
 ```env
 SPEEDTEST_CSV_SERVERS=12345,23456
 ```
 * Exaggerated examples, they may not be real server IDs
-  
-The Speedtest library retrieves the configured candidates and tests latency to
-the available matches before selecting the best one. This avoids repeatedly
-running `speedtest-cli --list`, which may be rate-limited if called too often.
+
+With the Python backend, the library retrieves the configured candidates and
+tests latency to the available matches before selecting the best one. With the
+Ookla backend, NetProbe orders matching candidates from the official
+`speedtest --servers` result and tries configured fallbacks if necessary.
+
+## Official Ookla terms and acceptance
+
+NetProbe remains MIT licensed, but the optional official Ookla CLI is separate
+third-party proprietary software. Before enabling the Ookla backend, review the
+current official documents:
+
+- Ookla EULA: https://www.speedtest.net/about/eula
+- Speedtest Terms of Use: https://www.speedtest.net/about/terms
+- Ookla Privacy Policy: https://www.speedtest.net/about/privacy
+
+The backend stays disabled by default through `SPEEDTEST_BACKEND=python`.
+The Docker build never runs the Ookla executable and never pre-accepts its
+terms. Before NetProbe invokes the official CLI, the end user must acknowledge
+the current documents at runtime using either method below.
+
+Non-interactive Unraid/Docker environment:
+
+```env
+SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT
+```
+
+Interactive acknowledgement stored in the persistent `/data` volume:
+
+```bash
+docker exec -it netprobe netprobe-ookla-accept
+```
+
+The helper displays the EULA, Terms, and Privacy links and requires the user to
+type `I ACCEPT`. NetProbe then passes the official CLI's `--accept-license` and
+`--accept-gdpr` flags when a test is actually run. The acknowledgement can be
+removed with `netprobe-ookla-accept --revoke`.
+
+## Enable the official Ookla backend
+
+The Dockerfile can install Ookla's official package on supported Debian
+architectures, but the build option defaults to `false`. This path is intended
+for a local/private personal home-lab build. Do not push an image containing the
+Ookla executable to a public registry unless you have separate written
+permission that allows redistribution.
+
+Build a private local image with the official binary:
+
+```bash
+DOCKER_BUILDKIT=1 docker build --pull --no-cache \
+  --build-arg INSTALL_OOKLA_SPEEDTEST=true \
+  -t bmmbmm01/netprobe:ookla-test ./probe
+```
+
+Then enable the backend at runtime only after accepting Ookla's current EULA,
+Terms of Use, and Privacy Policy:
+
+```env
+SPEEDTEST_BACKEND=ookla
+SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT
+SPEEDTEST_SERVER=23151
+```
+
+The runtime acknowledgement allows NetProbe to pass both `--accept-license`
+and `--accept-gdpr` to the official CLI for that deployment. It does not
+relicense the Ookla binary or grant redistribution or commercial-use rights.
+
+Verify both clients inside the container:
+
+```bash
+docker exec -it netprobe speedtest-cli --version
+docker exec -it netprobe speedtest --version
+```
+
+See `OOKLA_BACKEND_NOTICE.md` and `THIRD_PARTY_NOTICES.md` for the licensing
+boundary, official terms links, runtime acceptance behavior, and distribution
+notes.
 
 ## Troubleshooting
 
@@ -397,7 +498,7 @@ running `speedtest-cli --list`, which may be rate-limited if called too often.
   ```bash
   docker exec -it netprobe ping -c 3 8.8.8.8
   ```
-  
+
 - If this fails, fix host networking / firewall before debugging Netprobe.
 
 ---
@@ -434,5 +535,14 @@ docker logs netprobe
   Speedtest: ping=… down=… up=…
   ```
 
-- Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...) 
+- Remember automatic runs only happen every SPEEDTEST_INTERVAL seconds. (by default every 4 hours) you can manuly run or set this interval in the docker env...)
 - Use the Run Speedtest Now button in the UI to verify it works on demand
+
+---
+
+## License
+
+NetProbe source code is licensed under the MIT License. The official Ookla
+`speedtest` binary, when installed in the image, is third-party proprietary
+software governed by Ookla's separate terms and is not relicensed under MIT.
+See `THIRD_PARTY_NOTICES.md`.

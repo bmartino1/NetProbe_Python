@@ -22,7 +22,12 @@ services:
       retries: 5
 
   netprobe:
-    build: ./probe
+    build:
+      context: ./probe
+      args:
+        # Local/private build only. Keep false for any image intended for public
+        # distribution; enabling it installs Ookla's separately licensed binary.
+        INSTALL_OOKLA_SPEEDTEST: ${INSTALL_OOKLA_SPEEDTEST:-false}
     # Image exist..., you gitclone the project and build run the image instead:
     # image: bmmbmm01/netprobe:latest
     container_name: netprobe
@@ -38,6 +43,7 @@ services:
     environment:
       # ---- Core app settings ----
       WEB_PORT: ${WEB_PORT:-8080}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-240}
 
       # SQLite path (still used if DB_ENGINE=sqlite)
       DB_PATH: ${DB_PATH:-/data/netprobe.sqlite}
@@ -91,7 +97,19 @@ services:
       # Speedtest configuration
       SPEEDTEST_ENABLED: ${SPEEDTEST_ENABLED:-True}
       SPEEDTEST_INTERVAL: ${SPEEDTEST_INTERVAL:-14400}
+      # python = existing sivel/speedtest-cli library
+      # ookla = official /usr/bin/speedtest CLI
+      SPEEDTEST_BACKEND: ${SPEEDTEST_BACKEND:-python}
+      # The official Ookla CLI is separately licensed for personal,
+      # non-commercial use. End-user acknowledgement is never baked into the
+      # image. Set I_ACCEPT at launch after reviewing the documents, or run:
+      # docker exec -it netprobe netprobe-ookla-accept
+      SPEEDTEST_OOKLA_ACCEPT_LICENSE: ${SPEEDTEST_OOKLA_ACCEPT_LICENSE:-}
+      SPEEDTEST_OOKLA_ACCEPTANCE_FILE: ${SPEEDTEST_OOKLA_ACCEPTANCE_FILE:-/data/ookla-eula-accepted.txt}
+      SPEEDTEST_OOKLA_PATH: ${SPEEDTEST_OOKLA_PATH:-/usr/bin/speedtest}
+      SPEEDTEST_OOKLA_TIMEOUT: ${SPEEDTEST_OOKLA_TIMEOUT:-180}
       # True uses HTTPS/secure server discovery; False uses legacy HTTP.
+      # This applies only to the Python backend.
       # The two protocols may return different server ID lists.
       SPEEDTEST_SECURE: ${SPEEDTEST_SECURE:-True}
       # Legacy single-server mode. Leave blank for automatic selection.
