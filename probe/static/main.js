@@ -597,10 +597,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const cleaned = String(message || "unknown error").trim() || "unknown error";
     const reminder =
       backend === "ookla"
-        ? "Reminder: verify the official Ookla CLI is installed. After reviewing " +
-          "Ookla's EULA, Terms of Use, and Privacy Policy, set " +
-          "SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT or run " +
-          "netprobe-ookla-accept interactively; otherwise choose the Python backend."
+        ? "Reminder: after reviewing Ookla's EULA, Terms of Use, and Privacy Policy, " +
+          "run netprobe-ookla-accept inside the container to acknowledge and install " +
+          "the official CLI if missing, or choose the Python backend."
         : "Reminder: HTTP and HTTPS can return different Speedtest server IDs. " +
           "Toggle Secure / HTTPS or check Force auto and try again.";
     return [`Speedtest failed: ${cleaned}`, "", reminder].join("\n");
@@ -627,7 +626,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (ooklaInstallStatus) {
       ooklaInstallStatus.textContent = configCache?.speedtest_ookla_installed
         ? "CLI installed"
-        : "CLI not installed";
+        : "CLI not installed — run netprobe-ookla-accept";
     }
     if (ooklaAcceptanceStatus) {
       ooklaAcceptanceStatus.textContent = configCache?.speedtest_ookla_accept_license
