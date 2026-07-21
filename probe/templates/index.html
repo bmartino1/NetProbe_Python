@@ -301,8 +301,11 @@
               <a href="https://www.speedtest.net/about/eula" target="_blank" rel="noopener noreferrer">EULA</a>,
               <a href="https://www.speedtest.net/about/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>, and
               <a href="https://www.speedtest.net/about/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
-              Acknowledge at runtime with <code>SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT</code>
-              or run <code>netprobe-ookla-accept</code> interactively inside the container.
+              Run <code>netprobe-ookla-accept</code> interactively inside the container
+              to acknowledge the terms and install the official CLI if it is missing.
+              Administrators may also acknowledge with
+              <code>SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT</code> and then run
+              <code>netprobe-ookla-accept --install</code>.
             </div>
           </div>
           <div class="status-info" id="speedtestSummary">
