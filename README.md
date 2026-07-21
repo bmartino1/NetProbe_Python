@@ -387,7 +387,7 @@ SPEEDTEST_SERVER=
 SPEEDTEST_EXCLUDE=46408,4392
 ```
 * Exaggerated examples, they may not be real server IDs
-*
+
 #### Force one server
 
 ```env
@@ -396,7 +396,7 @@ SPEEDTEST_SERVER=12345
 SPEEDTEST_EXCLUDE=
 ```
 * Exaggerated examples, they may not be real server IDs
-*
+
 #### Use a fallback pool of servers
 
 The counted CSV format starts with the number of server IDs:
