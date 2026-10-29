@@ -7,8 +7,6 @@
 
 NetProbe monitors connectivity with scheduled **Ping/ICMP, DNS lookup timing, packet loss, latency, jitter, and an overall connection quality score**. It can also measure upload/download speeds using Python `speedtest-cli` or the separately installed official Ookla Speedtest CLI. Results are available in a responsive HTTPS WebUI with guest read-only access and administrator controls.
 
-> **Release note:** This README describes the tested NetProbe **2.1** implementation. Publish the matching 2.1 application files and Docker image **before** presenting this documentation as the active `latest` release. The legacy `latest` image might not have these features until it is replaced.
-
 ## Features
 
 - **First-run WebUI setup:** create an administrator account, sign in, then select monitoring targets and defaults. Scheduled probes stay paused until monitoring setup is completed.
@@ -22,41 +20,51 @@ NetProbe monitors connectivity with scheduled **Ping/ICMP, DNS lookup timing, pa
 
 ## Screenshots
 
-# inital setup admin account and Login:
-<img width="1260" height="946" alt="image" src="https://github.com/user-attachments/assets/2fd9e2ba-1b4f-420c-936b-c9210aa86823" />
+### First-run setup and sign-in
 
-<img width="1388" height="926" alt="image" src="https://github.com/user-attachments/assets/dbdcef31-98a9-45c1-81b3-b3ec9c2e8c9c" />
+![Administrator account creation](https://github.com/user-attachments/assets/2fd9e2ba-1b4f-420c-936b-c9210aa86823)
 
-# Admin First Login setup:
-<img width="1319" height="1081" alt="image" src="https://github.com/user-attachments/assets/31801f6f-bb39-4543-ab98-bd33e2a7bc1c" />
+![Administrator sign-in and guest access](https://github.com/user-attachments/assets/dbdcef31-98a9-45c1-81b3-b3ec9c2e8c9c)
 
-# Guest read only
-<img width="1619" height="1272" alt="image" src="https://github.com/user-attachments/assets/3813f22c-55aa-4021-b453-9f73f5629264" />
+### Initial monitoring configuration
 
-# Admin Manual Ping
-<img width="1707" height="1330" alt="Screenshot 2026-10-29 005233" src="https://github.com/user-attachments/assets/f94e36be-440b-40d5-9a7d-43583ec15536" />
+![First login monitoring setup](https://github.com/user-attachments/assets/31801f6f-bb39-4543-ab98-bd33e2a7bc1c)
 
+### Guest dashboard
 
-# Admin Logs and diags
-<img width="1704" height="1342" alt="Screenshot 2026-10-29 005252" src="https://github.com/user-attachments/assets/ed7716c8-ede8-4928-8d0d-c56825f6cc71" />
+![Read-only guest overview](https://github.com/user-attachments/assets/3813f22c-55aa-4021-b453-9f73f5629264)
 
+### Administrator diagnostics
 
-# Admin Setting page
-<img width="1712" height="1347" alt="Screenshot 2026-10-29 005323" src="https://github.com/user-attachments/assets/d89114c4-e642-4fd4-aaf0-c48998223d2c" />
-<img width="1705" height="1342" alt="Screenshot 2026-10-29 005315" src="https://github.com/user-attachments/assets/47f9a8c3-ade7-4d32-b7f5-bcfec3839869" />
-<img width="1702" height="1353" alt="Screenshot 2026-10-29 005307" src="https://github.com/user-attachments/assets/6af1864a-25eb-4e56-8978-a4bc28d7e36b" />
-<img width="1700" height="1347" alt="Screenshot 2026-10-29 005300" src="https://github.com/user-attachments/assets/82d58188-afb7-4268-a90b-83274715bacc" />
+![Manual Ping and DNS diagnostics](https://github.com/user-attachments/assets/f94e36be-440b-40d5-9a7d-43583ec15536)
 
-# Admin/Guest Pages
+![Live logs and diagnostics](https://github.com/user-attachments/assets/ed7716c8-ede8-4928-8d0d-c56825f6cc71)
 
-<img width="1236" height="515" alt="Screenshot 2026-10-29 005108" src="https://github.com/user-attachments/assets/f169536b-e6b8-43c4-a45c-d6ab0ed300f0" />
-<img width="1701" height="555" alt="Screenshot 2026-10-29 005102" src="https://github.com/user-attachments/assets/013de37b-5d2d-42b7-9ec2-ccb60ff82bab" />
-<img width="1700" height="1297" alt="Screenshot 2026-10-29 005057" src="https://github.com/user-attachments/assets/19d9a646-5590-4310-8803-108c162823a4" />
-<img width="1699" height="1298" alt="Screenshot 2026-10-29 005203" src="https://github.com/user-attachments/assets/f41544d3-18cf-4463-ba5a-3b40872255a7" />
-<img width="1692" height="1297" alt="Screenshot 2026-10-29 005052" src="https://github.com/user-attachments/assets/f352b370-4ce6-4737-b093-5b9924736bc8" />
-<img width="1709" height="1296" alt="Screenshot 2026-10-29 005046" src="https://github.com/user-attachments/assets/54c2b83c-1e68-4477-8854-9e8d7b4b36dc" />
-<img width="1710" height="1349" alt="Screenshot 2026-10-29 005037" src="https://github.com/user-attachments/assets/af53f028-0e44-458a-81a7-75bd7dae72a4" />
+### Administrator settings
 
+![Settings view 1](https://github.com/user-attachments/assets/d89114c4-e642-4fd4-aaf0-c48998223d2c)
+
+![Settings view 2](https://github.com/user-attachments/assets/47f9a8c3-ade7-4d32-b7f5-bcfec3839869)
+
+![Settings view 3](https://github.com/user-attachments/assets/6af1864a-25eb-4e56-8978-a4bc28d7e36b)
+
+![Settings view 4](https://github.com/user-attachments/assets/82d58188-afb7-4268-a90b-83274715bacc)
+
+### Monitoring pages — guest and administrator
+
+![Monitoring interface 1](https://github.com/user-attachments/assets/f169536b-e6b8-43c4-a45c-d6ab0ed300f0)
+
+![Monitoring interface 2](https://github.com/user-attachments/assets/013de37b-5d2d-42b7-9ec2-ccb60ff82bab)
+
+![Monitoring interface 3](https://github.com/user-attachments/assets/19d9a646-5590-4310-8803-108c162823a4)
+
+![Monitoring interface 4](https://github.com/user-attachments/assets/f41544d3-18cf-4463-ba5a-3b40872255a7)
+
+![Monitoring interface 5](https://github.com/user-attachments/assets/f352b370-4ce6-4737-b093-5b9924736bc8)
+
+![Monitoring interface 6](https://github.com/user-attachments/assets/54c2b83c-1e68-4477-8854-9e8d7b4b36dc)
+
+![Monitoring interface 7](https://github.com/user-attachments/assets/af53f028-0e44-458a-81a7-75bd7dae72a4)
 
 ## Quick start — SQLite (recommended)
 
@@ -88,7 +96,7 @@ docker compose -f compose.yaml logs --tail=100 netprobe
 
 ### Docker Hub image
 
-When the matching 2.1 image has been published, you can run it without building from source:
+The published NetProbe 2.1 image can run without building from source:
 
 ```bash
 docker run -d \
@@ -101,7 +109,7 @@ docker run -d \
   bmmbmm01/netprobe:latest
 ```
 
-**Check that `bmmbmm01/netprobe:latest` actually points to the 2.1 release before using this command.** For reproducible deployments, prefer a published version tag (for example, `:2.1.0`) once available. A persistent `/config` mount is strongly recommended; omitting it loses settings and measurement history when the container is recreated.
+`bmmbmm01/netprobe:latest` tracks the current Docker Hub release. For reproducible deployments, pin `bmmbmm01/netprobe:2.1.0`. A persistent `/config` mount is strongly recommended; omitting it loses settings and measurement history when the container is recreated.
 
 ## WebUI access
 
@@ -193,6 +201,56 @@ docker compose -f compose.yaml ps
 ```
 
 Back up `/config` first. **Do not use** `docker compose down -v`, `docker volume rm`, or indiscriminate Docker prune commands during an ordinary update. If you use PostgreSQL, use its respective Compose file for updates and back up the PostgreSQL volume too.
+
+## API reference
+
+NetProbe's dashboard uses JSON endpoints under `/api/`. Read-only endpoints are available to guests through the WebUI session. Administrator sessions are required for operations that run tests, modify settings, or access live application logs. A separately configured read-only API bearer token can be used for external dashboard integrations (for example, Grafana); protect it as a secret.
+
+### Read-only monitoring endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/api/score/recent?limit=N` | Recent aggregate Ping/DNS measurements and quality scores |
+| GET | `/api/score/latest` | Latest aggregate measurement, or `data: null` before first sample |
+| GET | `/api/metrics/targets` | Latest live Ping targets and DNS resolver timings (not historical per-target data) |
+| GET | `/api/config` | Effective read-only configuration, targets, thresholds and backend availability |
+| GET | `/api/speedtest/history?limit=N` | Stored bandwidth test results |
+| GET | `/api/speedtest/latest` | Most recent Speedtest result |
+| GET | `/api/manual/history` | Stored manual Ping/DNS diagnostic history (read-only) |
+
+A recent aggregate score row contains `ts`, `iso`, `avg_latency_ms`, `avg_jitter_ms`, `avg_loss_pct`, `avg_dns_latency_ms` and `score` (0–100). When available, `dns_per_server` maps resolver IP addresses to latency in milliseconds.
+
+Example (from a machine that trusts your NetProbe HTTPS certificate):
+
+```bash
+curl https://YOUR_SERVER_IP:8443/api/score/latest
+curl 'https://YOUR_SERVER_IP:8443/api/score/recent?limit=10'
+curl https://YOUR_SERVER_IP:8443/api/metrics/targets
+curl https://YOUR_SERVER_IP:8443/api/speedtest/latest
+```
+
+These examples assume an authenticated browser session or an appropriately configured read-only API credential where required. The default self-signed certificate must be trusted by the client (or explicitly bypassed for local testing). Response objects may be empty until monitoring has recorded data.
+
+### Administrator-only endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET / PUT | `/api/settings` | View and save monitoring configuration |
+| GET | `/api/manual/targets` | Configured/manual test target options |
+| POST | `/api/manual/run` | Run one Ping or DNS diagnostic |
+| POST | `/api/speedtest/run` | Run an on-demand bandwidth test |
+| GET | `/api/logs/live?since=0&limit=250` | Poll live application log lines |
+| GET / PUT | `/api/admin/database` | View and save database selection/profile |
+| GET | `/api/admin/postgres/check` | Test saved PostgreSQL connection |
+| GET | `/api/admin/speedtest/check` | Check Speedtest backend readiness |
+| GET / POST | `/api/admin/ookla` | Inspect/install optional Ookla CLI after acknowledgement |
+| GET / PUT | `/api/admin/password-policy` | Read or change administrator password minimum |
+| POST | `/api/admin/password` | Change administrator password |
+| POST | `/api/admin/restart-worker` | Restart the application worker to activate appropriate changes |
+
+For example, the manual Ping diagnostic accepts a JSON body with `kind: "ping"`, `target` and optional `count` (1–5); DNS diagnostics use `kind: "dns"` and a resolver IP. Speedtest requests can specify `backend`, `server_id`, `secure` (Python backend) and `force_auto`. These are authenticated actions, not public anonymous APIs.
+
+For external integrations, configure `NETPROBE_READONLY_API_TOKEN` in your deployment and send `Authorization: Bearer YOUR_TOKEN` on supported read-only GET requests. Never commit API tokens or administrator credentials to Git.
 
 ## Troubleshooting
 
