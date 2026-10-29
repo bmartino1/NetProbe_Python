@@ -1,0 +1,20 @@
+# NetProbe Python dependencies, audited against probe/app.py (2026-10-28).
+# Upstream authors, source repositories and licenses:
+# docs/PYTHON_DEPENDENCIES.md
+# Flask: HTML pages, authenticated session/setup, and monitoring JSON REST API.
+# Nginx is a reverse proxy: it cannot replace these Python endpoints.
+Flask
+
+# Gunicorn: Python WSGI server bound to 127.0.0.1 behind Nginx.
+gunicorn
+
+# DNS latency measurements and per-resolver querying.
+dnspython
+
+# Legacy Python Speedtest backend. Official Ookla CLI is installed separately
+# only after explicit administrator acknowledgement of Ookla terms.
+speedtest-cli
+
+# Optional PostgreSQL DB adapter (SQLite uses Python's built-in sqlite3).
+# Keep this until PostgreSQL is tested separately and offered as an optional extra.
+psycopg2-binary

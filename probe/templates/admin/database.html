@@ -1,0 +1,18 @@
+{# Database profile: only admin can edit; existing SQLite history is retained. #}
+<section class="np-db-settings">
+<h3>Database connection</h3>
+<p>NetProbe currently uses the selected database for new measurements. Changing engines does <strong>not</strong> move historical records: your SQLite database remains preserved under <code>/config/data/netprobe.sqlite</code>. First start the PostgreSQL Compose stack, then validate, save, and restart the application worker to activate your selection.</p>
+<div id="npDbFields" class="np-db-fields">
+<label>Database engine<select id="npDbEngine"><option value="sqlite">SQLite (local)</option><option value="postgres">PostgreSQL (external or Compose)</option></select></label>
+<label>PostgreSQL host<input id="npDbHost" placeholder="postgres" autocomplete="off"></label>
+<label>Port<input id="npDbPort" inputmode="numeric" value="5432"></label>
+<label>Database<input id="npDbName" value="netprobe"></label>
+<label>User<input id="npDbUser" value="netprobe"></label>
+<label>PostgreSQL password (leave empty to retain)<input id="npDbPassword" type="password" autocomplete="new-password" placeholder="Enter password only if updating"></label>
+</div>
+<button id="npDbSave" type="button">Validate and save database choice</button>
+<pre id="npDbSaveResult" role="status" style="white-space:pre-wrap">Current configuration loading…</pre>
+<p><strong>Connection test:</strong> checks the saved PostgreSQL profile with a read-only query. You can test while SQLite remains active. The password initially comes from the PostgreSQL Compose environment; saved credentials stay under /config. No history is migrated or deleted by this test.</p>
+<button type="button" id="npPostgresCheck">Test saved PostgreSQL connection</button>
+<pre id="npPostgresCheckResult" role="status" style="white-space:pre-wrap">Not checked yet.</pre>
+</section>

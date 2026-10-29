@@ -1,0 +1,17 @@
+{# Administrator password and browser-saved minimum policy. #}
+<section class="np-password-settings">
+<h3>Administrator password policy</h3>
+<p>Set the minimum length for new administrator passwords. Six is the lowest supported value; eight is the factory default. Existing passwords are not altered.</p>
+<div class="np-password-policy">
+<label for="npPasswordMinSlider">Minimum length: <output id="npPasswordMinValue">8 characters</output></label>
+<input id="npPasswordMinSlider" type="range" min="6" max="32" step="1" value="8">
+<button id="npSavePasswordPolicy" type="button">Save minimum length</button>
+<span id="npPasswordPolicyStatus" role="status"></span>
+</div>
+<h3>Change administrator password</h3>
+<div class="np-password-fields">
+<label>Current password<input id="npOldPassword" type="password" autocomplete="current-password" placeholder="Current password"></label>
+<label>New password<input id="npNewPassword" type="password" autocomplete="new-password" placeholder="Enter new password"></label>
+<button id="npChangePassword" type="button">Change password</button>
+</div>
+</section>

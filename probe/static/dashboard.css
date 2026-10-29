@@ -1,0 +1,388 @@
+/* NetProbe-owned dashboard styling. Keep structure/IDs aligned with
+ * probe/templates/index.html and the panel management in dashboard.js.
+ * The vendor Chart.js library is a separate, unmodified upstream asset. */
+
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        background: #111;
+        color: #eee;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        margin: 0;
+      }
+      .page {
+        padding: 16px;
+      }
+      .status-panel {
+        background: #181818;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+      }
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .status-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .status-info {
+        display: flex;
+        gap: 10px;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+      }
+      .badge {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #222;
+      }
+      .status-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .backend-notice {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid #5b4b21;
+        border-radius: 6px;
+        background: #211d12;
+        color: #f4e7b2;
+        font-size: 0.8rem;
+        line-height: 1.35;
+      }
+      .backend-notice a {
+        color: #93c5fd;
+      }
+      button.btn {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: none;
+        background: #2563eb;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+      button.btn.secondary {
+        background: #374151;
+      }
+      button.btn:hover {
+        background: #1d4ed8;
+      }
+      .general-output {
+        font-size: 0.85rem;
+        line-height: 1.3;
+        background: #141414;
+        border-radius: 6px;
+        padding: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+      .toggle-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 0.85rem;
+      }
+      .toggle-row label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .metric-panel {
+        background: #181818;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 16px;
+      }
+      .metric-left {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .metric-left canvas {
+        max-width: 200px;
+      }
+      .metric-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .gauge-text {
+        font-size: 0.9rem;
+      }
+      .metric-right {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .metric-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .metric-header-row h3 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      .range-select {
+        font-size: 0.8rem;
+        background: #222;
+        color: #eee;
+        border-radius: 4px;
+        border: 1px solid #333;
+      }
+      canvas {
+        max-width: 100%;
+      }
+      .metric-details {
+        font-size: 0.85rem;
+        line-height: 1.3;
+      }
+
+      /* DNS multi-line controls */
+      .dns-series-controls {
+        margin-top: 6px;
+        font-size: 0.8rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .dns-series-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: #141414;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid #222;
+      }
+      .inline-control-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .input-control {
+        font-size: 0.85rem;
+        background: #141414;
+        color: #eee;
+        border-radius: 6px;
+        border: 1px solid #333;
+        padding: 6px 10px;
+        min-width: 180px;
+      }
+      .compact-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 7px;
+        border: 1px solid #333;
+        border-radius: 6px;
+        background: #141414;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .compact-checkbox input {
+        margin: 0;
+      }
+      .input-control:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .log-panel {
+        background: #141414;
+        border-radius: 8px;
+        padding: 8px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .log-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-size: 0.85rem;
+      }
+      .live-log-output {
+        font-size: 0.82rem;
+        line-height: 1.35;
+        background: #0f0f0f;
+        border-radius: 6px;
+        padding: 10px;
+        min-height: 140px;
+        max-height: 320px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+    
+/* NetProbe 2.1 hybrid shell */
+:root{color-scheme:dark;--surface:#111b2a;--surface2:#182436;--edge:#2a3b50;--text:#e6edf6;--muted:#9caec2;--accent:#4bd296}*{box-sizing:border-box}body{background:#0b111b;color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.5}button,select,input{font:inherit}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #70baff;outline-offset:2px}.np-app{max-width:1560px;margin:auto;padding:20px clamp(12px,3vw,36px)}.np-header{display:flex;align-items:center;gap:18px;justify-content:space-between;padding:10px 0 22px}.np-brand{font-size:1.14rem;font-weight:800;letter-spacing:.09em;display:flex;align-items:center;gap:12px}.np-brand small{font-size:.62rem;letter-spacing:.02em;color:#86a8c8;border:1px solid #34516e;border-radius:6px;padding:3px 6px}.np-logo{color:var(--accent);font-size:1.7rem}.np-top-status{color:var(--muted);font-size:.85rem;margin-left:auto}.np-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;box-shadow:0 0 0 4px #4bd29615}.np-icon{color:var(--text);background:var(--surface);border:1px solid var(--edge);border-radius:10px;cursor:pointer;padding:10px 14px}.np-nav{display:flex;gap:4px;border-bottom:1px solid var(--edge);overflow-x:auto}.np-nav-button{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;padding:12px 20px;white-space:nowrap}.np-nav-button:hover,.np-nav-button.active{color:#fff}.np-nav-button.active{border-bottom-color:var(--accent)}.np-status{padding:26px 0 12px}.np-status-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.np-eyebrow{color:var(--accent);letter-spacing:.14em;font-size:.68rem;font-weight:800}.np-status h1{margin:3px 0 0;font-size:clamp(1.5rem,2.5vw,2rem)}.np-status p,.np-view-heading p,.np-tool-body p{margin:4px 0;color:var(--muted);font-size:.87rem}.np-status-pills{margin-top:16px}.np-status-pills .status-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted)}.np-status-pills #speedtestSummary{margin-top:7px}.np-status-pills .badge{background:var(--surface);border:1px solid var(--edge);padding:5px 9px}.np-cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:16px 0 28px}.np-card{min-width:0;border:1px solid var(--edge);background:var(--surface);border-radius:14px;padding:17px 15px;display:flex;flex-direction:column;gap:8px}.np-card small{color:var(--muted);font-size:.68rem;letter-spacing:.06em;font-weight:750}.np-card strong{font-size:clamp(1.1rem,1.8vw,1.55rem);font-variant-numeric:tabular-nums;color:var(--accent);overflow-wrap:anywhere}.np-card span{font-size:.71rem;color:var(--muted)}.np-card[hidden]{display:none}.np-view-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.np-view-heading h2{margin:0;font-size:1.23rem}.np-view-actions{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:.85rem}.np-view-actions select{padding:8px;border:1px solid var(--edge);border-radius:8px;background:var(--surface);color:var(--text)}.np-workspace{display:grid;gap:16px;grid-template-columns:1fr}.np-workspace .metric-panel{margin:0;border:1px solid var(--edge);border-radius:14px;background:var(--surface);box-shadow:none;min-width:0;grid-template-columns:minmax(160px,230px) minmax(0,1fr);padding:20px;gap:20px}.np-workspace .metric-left{justify-content:flex-start}.np-workspace .metric-title{font-size:1rem}.np-workspace .metric-right{min-width:0}.np-workspace .metric-details{color:#b7c5d5}.np-workspace canvas{max-width:100%}.np-workspace .range-select{background:var(--surface2);border-color:var(--edge);padding:6px;color:var(--text)}.np-footer{color:var(--muted);font-size:.75rem;text-align:center;padding:30px 0}.np-app[data-density="compact"] .np-card{padding:9px 12px;gap:3px}.np-app[data-density="compact"] .np-workspace .metric-panel{padding:12px;gap:10px;grid-template-columns:130px minmax(0,1fr)}.np-app[data-density="compact"] .metric-details{display:none}.np-app[data-density="detailed"] .np-workspace .metric-panel{grid-template-columns:minmax(180px,260px) minmax(0,1fr);padding:25px}.np-empty{padding:60px;text-align:center;color:var(--muted);border:1px dashed var(--edge);border-radius:12px}.np-scrim{position:fixed;inset:0;background:#01050acc;z-index:100}.np-scrim[hidden]{display:none}.np-drawer{position:fixed;right:0;top:0;bottom:0;width:min(540px,100%);background:#111b2a;border-left:1px solid var(--edge);z-index:101;transform:translateX(101%);transition:transform .2s ease;display:flex;flex-direction:column;box-shadow:-10px 0 40px #0005}.np-drawer.open{transform:translateX(0)}.np-drawer-top{padding:20px;display:flex;justify-content:space-between;align-items:center}.np-drawer-top h2{margin:3px 0 0;font-size:1.23rem}.np-drawer-nav{display:flex;overflow-x:auto;gap:5px;border-bottom:1px solid var(--edge);padding:0 12px}.np-drawer-nav button{white-space:nowrap;color:var(--muted);background:transparent;border:0;border-bottom:2px solid transparent;padding:11px 8px;cursor:pointer}.np-drawer-nav button.active{color:var(--text);border-bottom-color:var(--accent)}.np-tool-body{overflow:auto;padding:20px;min-height:0}.np-tool-body[hidden]{display:none}.np-tool-body .inline-control-row{display:flex;flex-direction:column;align-items:stretch;gap:12px}.np-tool-body .input-control{width:100%}.np-tool-body .compact-checkbox{white-space:normal}.np-tool-body #generalOutput{max-height:70vh;min-height:280px;background:#0c1420;border:1px solid var(--edge);font-family:ui-monospace,monospace;padding:14px}.np-tool-body #logPanel{display:flex!important;min-height:240px}.np-tool-body #liveLogOutput{max-height:65vh;min-height:250px}.np-tool-body .toggle-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:12px}.np-tool-body .toggle-row label{border:1px solid var(--edge);border-radius:8px;padding:10px}.np-tool-body .backend-notice{width:100%}.np-tool-body button.btn{padding:10px 12px}.np-tool-body .log-toolbar{gap:8px}.np-tool-body .log-toolbar .btn{font-size:.78rem}
+@media(max-width:1150px){.np-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:700px){.np-app{padding:10px 12px}.np-top-status{display:none}.np-brand{font-size:1rem}.np-nav-button{padding:11px 12px}.np-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.np-card{padding:12px 10px}.np-status-head{align-items:flex-start;flex-direction:column}.np-workspace .metric-panel,.np-app[data-density="compact"] .np-workspace .metric-panel,.np-app[data-density="detailed"] .np-workspace .metric-panel{grid-template-columns:1fr;padding:14px}.np-workspace .metric-left{align-items:center}.np-workspace .metric-right{width:100%}.np-view-heading{align-items:flex-start}.np-view-actions{flex-direction:column;gap:2px}.np-status h1{font-size:1.5rem}.np-tool-body .toggle-row{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.np-drawer{transition:none}}
+
+.np-settings-modal:not([hidden]){display:grid;position:fixed;inset:0;background:#070a10de;z-index:999;place-items:center;padding:16px}.np-settings-content{width:min(850px,100%);max-height:92vh;overflow:auto;padding:25px;border-radius:16px;background:#1b2635;color:#eef4fc;box-sizing:border-box}.np-settings-head{display:flex;align-items:center;justify-content:space-between}.np-settings-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}.np-settings-fields label{display:grid;gap:5px;font-size:12px;color:#bfc8d5}.np-settings-content input{background:#101823;color:#fff;padding:9px;border:1px solid #536173;border-radius:6px;min-width:0}.np-settings-content button{padding:9px 13px;background:#2f8e6d;color:white;border:0;border-radius:6px;margin:8px 8px 8px 0;cursor:pointer}.np-settings-content p{line-height:1.5;color:#bdc9d6}
+
+/* --- NetProbe 2.1 application shell: sidebar + dedicated workspace views ---
+   UI structure lives in templates/static. No probe calculations in this file. */
+:root{--np-left:250px;--np-border:#26354a;--np-bg:#0b1220;--np-card:#152133;--np-accent:#45c59a}
+body{background:var(--np-bg);color:#eaf2fd}
+[hidden]{display:none!important}
+.np-sidebar{position:fixed;inset:0 auto 0 0;width:var(--np-left);background:#101b2b;border-right:1px solid var(--np-border);display:flex;flex-direction:column;z-index:80;overflow-y:auto;box-sizing:border-box;padding:22px 12px}
+.np-sidebar-brand{display:flex;align-items:center;gap:10px;color:#f5f9ff;font-size:20px;font-weight:800;padding:4px 12px 26px}
+.np-sidebar-brand small{display:block;color:#7f98b7;font-size:10px;letter-spacing:1.3px}
+.np-sidebar-caption{color:#7993b0;font-size:10px;letter-spacing:1.8px;font-weight:800;padding:18px 13px 9px}
+.np-sidebar-links{display:grid;gap:3px}
+.np-side-link{width:100%;border:0;background:transparent;color:#b7c8dd;padding:12px 14px;border-radius:10px;text-align:left;font-size:14px;cursor:pointer;display:flex;gap:12px;align-items:center}
+.np-side-link:hover,.np-side-link:focus-visible{background:#20324a;color:#fff}
+.np-side-link.active{background:#204436;color:#6ef0bc;font-weight:700}
+.np-sidebar-bottom{margin-top:auto;border-top:1px solid var(--np-border);padding:18px 12px 6px;color:#9bb0ca;font-size:12px}
+.np-role{color:#62dcad;font-weight:700}
+.np-sidebar-hint{line-height:1.5;margin-top:10px}
+.np-mobile-menu{display:none}
+.np-app{margin-left:var(--np-left)!important;max-width:none!important;width:calc(100% - var(--np-left))!important;box-sizing:border-box;padding:0 28px 34px!important}
+.np-nav{display:none!important}
+.np-header{border-bottom:1px solid var(--np-border);padding:18px 0!important;min-height:64px}
+.np-brand{display:none!important}
+.np-tool-body{max-width:none}
+.np-scrim{background:rgba(2,7,14,.5)}
+/* Full width diagnostics workspace: no narrow side drawer overlapping charts. */
+.np-drawer{position:fixed!important;left:var(--np-left)!important;right:0!important;top:0!important;bottom:0!important;width:auto!important;max-width:none!important;height:100vh!important;transform:translateX(105%)!important;background:var(--np-bg)!important;overflow:auto!important;padding:26px 38px!important;z-index:110!important;box-sizing:border-box;border-left:0!important}
+.np-drawer.open{transform:translateX(0)!important}
+.np-drawer-top{max-width:1100px;margin:0 auto 16px}
+.np-drawer-nav{max-width:1100px;margin:0 auto 24px;display:flex;gap:10px;flex-wrap:wrap}
+.np-tool-body{max-width:1100px;margin:0 auto}
+.np-tool-body input,.np-tool-body select{max-width:100%;box-sizing:border-box}
+.np-manual-checks{background:#152235;border:1px solid var(--np-border);padding:24px;border-radius:16px;margin-bottom:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px}
+.np-manual-checks h3,.np-manual-checks p,.np-manual-checks pre{grid-column:1/-1}
+.np-manual-checks label{display:grid;gap:7px}
+.np-manual-checks button{background:#245e4b;color:#fff;border:1px solid #3b9978;border-radius:8px;padding:10px}
+.np-manual-checks pre{max-height:260px;overflow:auto;background:#0c1625;border-radius:9px;padding:14px}
+.np-manual-checks p{color:#b4c6dc}
+.np-settings-modal{position:fixed!important;inset:0 0 0 var(--np-left)!important;width:auto!important;height:100vh!important;background:var(--np-bg)!important;z-index:125!important;overflow:auto!important;padding:28px 36px!important;box-sizing:border-box}
+.np-settings-content{width:min(1120px,100%)!important;max-width:none!important;margin:0 auto!important;max-height:none!important;height:auto!important;overflow:visible!important;box-sizing:border-box;background:transparent!important;padding:0!important;box-shadow:none!important}
+.np-settings-head{padding:0 0 18px;border-bottom:1px solid var(--np-border);margin-bottom:20px}
+.np-settings-head h2{font-size:27px!important}
+.np-settings-fields{display:grid!important;grid-template-columns:repeat(2,minmax(230px,1fr));gap:14px!important}
+.np-settings-fields label{display:grid!important;gap:7px;padding:15px;background:#152235;border:1px solid var(--np-border);border-radius:11px;color:#e0eafa;font-size:13px}
+.np-settings-fields input,.np-settings-fields select{width:100%;min-width:0;box-sizing:border-box}
+.np-settings-section{grid-column:1/-1;padding-top:20px;margin:0;color:#72dfb6;font-size:16px;border-top:1px solid var(--np-border)}
+#npEnvMismatch:not([hidden]){padding:15px;background:#332d1f;border:1px solid #75633e;border-radius:9px;color:#f0d99c;margin-bottom:16px}
+.np-settings-content>h3,.np-settings-content>section{margin-top:32px}
+.np-settings-content pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101b2b;border:1px solid var(--np-border);padding:14px;border-radius:10px}
+.np-settings-content button{border-radius:8px!important;cursor:pointer}
+.np-card strong{overflow-wrap:anywhere;font-size:clamp(20px,2vw,30px)}
+.np-status,.np-workspace,.np-cards{min-width:0}
+@media(max-width:950px){:root{--np-left:210px}.np-app{padding:0 16px 24px!important}.np-sidebar{padding:15px 8px}.np-settings-fields{grid-template-columns:1fr}}
+@media(max-width:720px){:root{--np-left:0px}.np-sidebar{width:260px;transform:translateX(-105%);transition:transform .2s;box-shadow:8px 0 35px #0007}.np-sidebar.mobile-open{transform:translateX(0)}.np-mobile-menu{display:block;position:fixed;z-index:140;top:10px;left:9px;background:#243750;border:1px solid #3c536d;color:white;padding:8px 12px;border-radius:7px}.np-app{width:100%!important;margin:0!important;padding:48px 12px 24px!important}.np-drawer{padding:65px 15px 20px!important}.np-settings-modal{padding:55px 15px 20px!important}.np-settings-fields{grid-template-columns:1fr}.np-header{flex-wrap:wrap}}
+
+/* Left sidebar is the primary navigation; legacy header triggers are kept
+   in the DOM for existing JS handlers but do not duplicate navigation. */
+#npOpenTools,#npSettingsOpen,#npCustomize{display:none!important}
+.np-sidebar button{font-family:inherit}
+.np-manual-checks input,.np-manual-checks select{background:#0c1625;color:#eaf2fd;border:1px solid #465873;padding:10px;border-radius:8px}
+.np-settings-fields select{background:#0c1625;color:#eaf2fd;border:1px solid #536173;padding:10px;border-radius:8px}
+
+
+/* Distinct monitoring pages: keep view-specific content from blending with
+   historical Chart.js canvases and provide readable data tables. */
+.np-feature-page{display:grid;gap:20px;margin:22px 0 26px}
+.np-feature-head h2{font-size:26px;margin:0 0 6px}
+.np-feature-head p{color:#9fb4d0;margin:0}
+.np-feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.np-feature-card{min-width:0;background:#132033;border:1px solid #2a3b53;border-radius:14px;padding:20px 22px;overflow:auto}
+.np-feature-card h3{font-size:16px;margin:0 0 14px}
+.np-feature-card p{color:#acc0d9;line-height:1.5}
+.np-large-value{font-size:clamp(34px,4vw,58px);color:#44d39d;font-weight:800}
+.np-data-table{border-collapse:collapse;width:100%;font-size:14px}
+.np-data-table td{padding:10px 9px;border-bottom:1px solid #2c3d54;overflow-wrap:anywhere}
+.np-data-table td:first-child{color:#9eb3ce;width:35%}
+#npSpeedDetails{white-space:pre-wrap;overflow-wrap:anywhere;color:#c1d4e9;font:13px ui-monospace,monospace}
+.np-speed-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 0}
+.np-speed-controls input,.np-speed-controls select{background:#0d192a;border:1px solid #405773;color:#eaf2fa;border-radius:8px;padding:10px;min-width:160px}
+.np-speed-controls .compact-checkbox{display:flex;align-items:center;gap:6px;font-size:13px}
+.np-speed-controls .compact-checkbox input{min-width:auto}
+.np-speed-controls button{background:#2aa67e;color:#061911;font-weight:700;padding:11px 15px;border:0;border-radius:9px}
+.np-speed-output{background:#0c1625;padding:14px;border-radius:10px;white-space:pre-wrap}
+@media(max-width:800px){.np-feature-grid{grid-template-columns:1fr}}
+
+/* History chart selection is a local display preference, available to guests. */
+.np-history-customize{margin:20px 0 12px}
+#npHistoryCustomize{border:1px solid #3e5c75;background:#20354b;color:#d6eafa;border-radius:9px;padding:10px 16px;cursor:pointer}
+#npHistoryOptions{background:#132033;border:1px solid #2d4156;border-radius:12px;padding:14px 20px;margin-top:12px;max-width:780px}
+#npHistoryOptions .np-tool-body{max-width:none;margin:0}
+#npHistoryOptions .toggle-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+#npHistoryOptions label{display:flex;align-items:center;gap:8px}
+.np-manual-speed-link{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.np-manual-speed-link button{background:#244a61;border:1px solid #4b839e;border-radius:7px;padding:7px 11px;color:white}
+
+/* Explicit view selection prevents old modal/drawer styling from blanking pages. */
+body[data-current-view="overview"] #npOverviewPage,body[data-current-view="metrics"] #npMetricsPage,body[data-current-view="speedtest"] #npSpeedPage{display:grid!important;visibility:visible!important;opacity:1!important}
+body[data-current-view="overview"] #npOverviewPage[hidden],body[data-current-view="metrics"] #npMetricsPage[hidden],body[data-current-view="speedtest"] #npSpeedPage[hidden]{display:grid!important}
+body[data-current-view="overview"] #npMetricsPage,body[data-current-view="overview"] #npSpeedPage,body[data-current-view="metrics"] #npOverviewPage,body[data-current-view="metrics"] #npSpeedPage,body[data-current-view="speedtest"] #npOverviewPage,body[data-current-view="speedtest"] #npMetricsPage,body[data-current-view="history"] .np-feature-page{display:none!important}
+#npHistoryOptions:not([hidden]) #npToolLayout{display:block!important}
+#npHistoryOptions[hidden]{display:none!important}
+
+/* Logs: readable fixed-width text, with line wrapping and stable toolbar. */
+#logPanel{max-width:1100px;margin:auto}
+#liveLogOutput{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important;tab-size:2}
+.log-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+
+/* The JS view controller owns the hidden attribute. Do not use overlapping
+   body[data-current-view] selectors to force a different visibility state.
+   The active view is explicitly unhidden; inactive views stay hidden. */
+#npOverviewPage[hidden],#npMetricsPage[hidden],#npSpeedPage[hidden],#npCustomizePage[hidden],
+#npToolTests[hidden],#npToolConfig[hidden],#npToolLogs[hidden]{display:none!important}
+#npOverviewPage:not([hidden]),#npMetricsPage:not([hidden]),
+#npSpeedPage:not([hidden]),#npCustomizePage:not([hidden]){display:grid!important;visibility:visible!important;opacity:1!important}
+#npToolTests:not([hidden]),#npToolConfig:not([hidden]),#npToolLogs:not([hidden]){display:block!important}
+#npWorkspace[hidden],#npCards[hidden],.np-status[hidden],.np-view-heading[hidden]{display:none!important}
+
+/* Administrator-only worker reload belongs alongside save controls. */
+.np-restart-area{margin-top:18px;padding:14px 16px;background:#112136;border:1px solid #37506a;border-radius:10px}
+.np-restart-area p{margin:0 0 12px;color:#b9cbe0;line-height:1.5}
+#npRestartWorker{background:#263f57;color:#eaf5ff;border:1px solid #52738d;border-radius:8px;padding:10px 14px;cursor:pointer}
+#npRestartStatus{margin-left:10px;color:#9edac5}
+
+/* Full-width administrator password form and policy slider. */
+.np-password-settings{margin:20px 0}
+.np-password-settings p{color:#a9bdd4;line-height:1.55}
+.np-password-policy{display:grid;gap:12px;max-width:700px;background:#132033;padding:18px;border-radius:12px;border:1px solid #344c66}
+.np-password-policy input[type=range]{width:100%;accent-color:#42b883}
+.np-password-policy button{width:max-content;max-width:100%;padding:10px 18px}
+#npPasswordPolicyStatus{color:#9fc9d5;overflow-wrap:anywhere}
+.np-password-fields{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:14px;align-items:end;margin-top:15px}
+.np-password-fields label{display:grid;gap:8px;min-width:0}
+.np-password-fields input{width:100%;min-width:0;box-sizing:border-box;padding:12px;font-size:15px}
+.np-password-fields button{grid-column:1/-1;width:max-content;min-width:200px;max-width:100%}
+@media(max-width:650px){.np-password-fields{grid-template-columns:1fr}}
+
+/* Database migration testing: readable paired fields instead of cramped inline labels. */
+.np-db-settings{margin:24px 0}
+.np-db-settings>p{line-height:1.6;color:#b8cce0}
+.np-db-fields{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:14px;margin:18px 0}
+.np-db-fields label{display:flex;flex-direction:column;gap:7px;min-width:0;line-height:1.4}
+.np-db-fields input,.np-db-fields select{width:100%;min-width:0;box-sizing:border-box;padding:11px;border-radius:7px}
+.np-db-settings pre{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+@media(max-width:850px){.np-db-fields{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:540px){.np-db-fields{grid-template-columns:1fr}}

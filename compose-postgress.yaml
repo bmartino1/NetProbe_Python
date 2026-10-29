@@ -1,0 +1,73 @@
+# NetProbe 2.1 — PostgreSQL-inclusive deployment (opt-in).
+# Use: docker compose -f compose-postgress.yaml up -d --build
+# Do NOT combine with compose.yaml or run both at the same time: both define
+# the same NetProbe service/container, ports and persistent config volume.
+#
+# Monitoring, DNS, quality scoring and Speedtest settings are intentionally
+# omitted: the first-run /setup wizard writes them to /config/settings.json.
+# Optional first-boot seeds: uncomment env_file under netprobe below.
+#
+# IMPORTANT: Set POSTGRES_PASSWORD in an untracked .env BEFORE deploying.
+# Compose substitutes .env automatically, even when env_file is commented.
+# Example (choose a long random value):
+#   POSTGRES_PASSWORD=replace-with-a-long-random-secret
+# Database connection details are infrastructure settings, NOT WebUI fields.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: netprobe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netprobe}
+      POSTGRES_USER: ${POSTGRES_USER:-netprobe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in an untracked .env file before starting PostgreSQL}
+    # No published port: NetProbe connects through the internal Compose network.
+    volumes:
+      - netprobe_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  netprobe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: netprobe:dev
+    container_name: netprobe
+    restart: unless-stopped
+    # Tiny init reaps orphaned subprocesses and forwards Docker stop signals.
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${NETPROBE_HTTP_PORT:-8080}:80"
+      - "${NETPROBE_HTTPS_PORT:-8443}:8443"
+    # These application defaults can be seeded ONLY on first boot.
+    # Keep disabled for a generic /setup WebUI experience.
+    # env_file:
+    #   - ./dockerenvironment.env
+    environment:
+      NETPROBE_CONFIG_DIR: /config
+      # Optional account security preference; default is 8, minimum allowed 6.
+      NETPROBE_MIN_PASSWORD_LENGTH: ${NETPROBE_MIN_PASSWORD_LENGTH:-8}
+      # Only set true for intentionally unattended, fully provisioned deployments.
+      NETPROBE_AUTOSTART_CONFIGURED: ${NETPROBE_AUTOSTART_CONFIGURED:-false}
+      DB_ENGINE: postgres
+      DB_PATH: /config/data/netprobe.sqlite # local SQLite fallback, NOT active while PostgreSQL is healthy
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-netprobe}
+      POSTGRES_USER: ${POSTGRES_USER:-netprobe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in an untracked .env file before starting PostgreSQL}
+    volumes:
+      - netprobe_config:/config
+    cap_add:
+      - NET_RAW
+
+volumes:
+  netprobe_config:
+  netprobe_pgdata:

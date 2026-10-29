@@ -1,0 +1,37 @@
+{# First-run monitor defaults: keys and values come from app.py and
+   /config/settings.json; POST is protected with the session CSRF token.
+   The first monitoring cycle starts only after setup is saved. #}
+<!doctype html><html lang="en"><head><link rel="icon" type="image/png" href="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png"><link rel="apple-touch-icon" href="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Configure NetProbe</title><style>body{background:#0d1320;color:#e8eff9;font:16px system-ui;min-height:100vh;display:grid;place-items:center;margin:0}main{width:min(760px,90vw);background:#1b2635;padding:30px;border-radius:16px;box-shadow:0 10px 40px #0005}label{display:grid;gap:5px;font-size:13px}input,select{box-sizing:border-box;width:100%;background:#0f1927;color:white;border:1px solid #526076;border-radius:8px;padding:10px}form{display:grid;gap:14px}button{background:#42b883;color:#08130e;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer}.muted{color:#abb9cd}.error{color:#ff9999}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}h1{margin-top:0}.ookla-box{background:#101e30;border:1px solid #41536a;padding:16px;border-radius:10px;display:grid;gap:12px}.ookla-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.ookla-actions button{width:auto}.ookla-box[hidden]{display:none}.muted a{color:#a5dbff}#setupOoklaStatus{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><main><h1><img src="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png" alt="" width="36" height="36" style="vertical-align:middle;margin-right:10px">Set up monitoring</h1><p class="muted">Step 2 of 2 · These are editable defaults. Saved values persist under /config. Monitoring remains paused until you finish this setup. Saved monitoring changes apply live.</p><form method="post"><input type="hidden" name="csrf" value="{{csrf}}"><div class="grid">{% for key in keys %}<label>{{key.replace('_',' ')|title|replace('Dns','DNS')|replace('Ip','IP') if key not in ('SPEEDTEST_BACKEND',) else 'Speedtest backend'}}{% if key == 'SPEEDTEST_BACKEND' %}<select name="{{key}}" id="setupSpeedtestBackend"><option value="python" {% if settings.get(key)=='python' %}selected{% endif %}>Python speedtest-cli</option><option value="ookla" {% if settings.get(key)=='ookla' %}selected{% endif %}>Official Ookla CLI (requires acceptance)</option></select>{% elif key == 'SPEEDTEST_ENABLED' %}<select name="{{key}}"><option value="true" {% if settings.get(key)=='true' %}selected{% endif %}>Enabled</option><option value="false" {% if settings.get(key)=='false' %}selected{% endif %}>Disabled</option></select>{% else %}<input name="{{key}}" value="{{settings.get(key,'')}}" {% if key not in ('ROUTER_IP',) %}required{% endif %}>{% endif %}</label>{% endfor %}</div><section class="ookla-box" id="setupOoklaBox" hidden><strong>Official Ookla Speedtest CLI</strong><p class="muted">The official binary is installed only after you accept its <a href="https://www.speedtest.net/about/eula" target="_blank" rel="noopener">EULA</a>, <a href="https://www.speedtest.net/about/terms" target="_blank" rel="noopener">Terms</a> and <a href="https://www.speedtest.net/about/privacy" target="_blank" rel="noopener">Privacy Policy</a>. Runtime installation may be lost when recreating this Docker container.</p><div class="ookla-actions"><input id="setupOoklaConsent" aria-label="Type I ACCEPT" placeholder="Type I ACCEPT or i_accept" style="max-width:260px"><button type="button" id="setupOoklaInstall">Acknowledge and install</button><button type="button" id="setupOoklaRefresh">Refresh status</button></div><div class="muted" id="setupOoklaStatus" role="status">Checking installation status…</div></section><p class="muted">Weights must total 1.0. If selecting Ookla, acknowledge and install its CLI before enabling scheduled Speedtests.</p>{% if error %}<p class="error">{{error}}</p>{% endif %}<button type="submit" name="action" value="save">Save settings and open dashboard</button><button type="submit" name="action" value="defaults">Use defaults and open dashboard</button></form></main><script>
+(()=>{'use strict';
+ const choice=document.getElementById('setupSpeedtestBackend');
+ const box=document.getElementById('setupOoklaBox');
+ const status=document.getElementById('setupOoklaStatus');
+ const install=document.getElementById('setupOoklaInstall');
+ const consent=document.getElementById('setupOoklaConsent');
+ const normalize=s=>s.trim().replaceAll('_',' ').replace(/\s+/g,' ').toUpperCase();
+ let timer=null;
+ const show=()=>{box.hidden=choice.value!=='ookla';if(!box.hidden)refresh();};
+ async function refresh(){
+  try{
+   const response=await fetch('/api/admin/ookla',{cache:'no-store'});
+   const result=await response.json();
+   if(!response.ok)throw Error(result.error||'Status unavailable');
+   status.textContent=(result.installed?'CLI installed':'CLI not installed')+' · '+(result.accepted?'Terms acknowledged':'Terms not acknowledged')+(result.running?' · Installation in progress…':result.success===false?' · Installation failed':'');
+   install.disabled=result.installed||result.running;
+   if(timer)clearTimeout(timer);
+   if(result.running)timer=setTimeout(refresh,3000);
+  }catch(e){status.textContent=e.message;}
+ }
+ install.addEventListener('click',async()=>{
+  if(normalize(consent.value)!=='I ACCEPT'){status.textContent='Enter I ACCEPT (case-insensitive; i_accept also accepted) to proceed.';return;}
+  install.disabled=true;status.textContent='Starting installer…';
+  try{
+   const response=await fetch('/api/admin/ookla',{method:'POST',headers:{'Content-Type':'application/json','X-NetProbe-CSRF':{{ csrf|tojson }}},body:JSON.stringify({confirmation:normalize(consent.value)})});
+   const result=await response.json();if(!response.ok)throw Error(result.error||'Installer unavailable');await refresh();
+  }catch(e){status.textContent=e.message;install.disabled=false;}
+ });
+ document.getElementById('setupOoklaRefresh').addEventListener('click',refresh);
+ choice.addEventListener('change',show);
+ show();
+})();
+</script></body></html>

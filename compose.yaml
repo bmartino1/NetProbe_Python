@@ -1,0 +1,40 @@
+# NetProbe 2.1 — single-container test deployment.
+# One Dockerfile, two alternative Compose deployments, one optional environment example.
+# Default: SQLite + HTTPS + first-run setup with NO env file required.
+services:
+  netprobe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: netprobe:dev
+    container_name: netprobe
+    restart: unless-stopped
+    # Tiny init reaps orphaned subprocesses and forwards Docker stop signals.
+    init: true
+    # Host ports are Docker deployment settings, not editable through the
+    # in-container WebUI. HTTPS uses container :8443; :80 redirects to it.
+    ports:
+      - "${NETPROBE_HTTP_PORT:-8080}:80"
+      - "${NETPROBE_HTTPS_PORT:-8443}:8443"
+    # Optional advanced settings can seed the *first* boot only.
+    # Do not enable unless you intentionally want to supply initial values:
+    # env_file:
+    #   - ./dockerenvironment.env
+    environment:
+      NETPROBE_CONFIG_DIR: /config
+      # Optional account security preference; default is 8, minimum allowed 6.
+      NETPROBE_MIN_PASSWORD_LENGTH: ${NETPROBE_MIN_PASSWORD_LENGTH:-8}
+      # Only set true for intentionally unattended, fully provisioned deployments.
+      NETPROBE_AUTOSTART_CONFIGURED: ${NETPROBE_AUTOSTART_CONFIGURED:-false}
+      DB_ENGINE: ${DB_ENGINE:-sqlite}
+      DB_PATH: /config/data/netprobe.sqlite
+      # Set DB_ENGINE=postgres only with a separately managed PostgreSQL server.
+    # One optional persistent volume: /config/data contains SQLite/history,
+    # while /config contains settings, administrator secrets and TLS keys.
+    volumes:
+      - netprobe_config:/config
+    cap_add:
+      - NET_RAW
+    # No docker.sock mount. WebUI cannot change host-side Docker mappings.
+volumes:
+  netprobe_config:

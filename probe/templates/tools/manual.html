@@ -1,0 +1,52 @@
+{# Diagnostic workspace: manual. Existing JS IDs retained. #}
+<div class="np-tool-body" id="npToolTests">
+<section aria-label="Manual Ping and DNS checks" class="np-manual-checks">
+<h3>Manual network tests</h3><p class="np-manual-speed-link">Need a bandwidth test? <button type="button" id="npGoSpeedtest">Open Speedtest</button> to run the Python or official Ookla client and review its recorded results.</p>
+<p>Run Ping or DNS against configured or temporary targets. Speedtest has its own manual controls on the Speedtest page. These checks do not change scheduled monitoring.</p>
+<label>Test type <select id="npManualKind"><option value="ping">Ping / ICMP</option><option value="dns">DNS A lookup</option></select></label>
+<label>Saved targets <select id="npManualPresets"><option value="">Custom target…</option></select></label>
+<label>Target hostname or IP <input id="npManualTarget" placeholder="example.com or 1.1.1.1" autocomplete="off"></label>
+<label id="npManualResolverWrap">DNS resolver <select id="npManualResolver"></select></label>
+<label>Requests (ping only, 1–5) <input id="npManualCount" type="number" min="1" max="5" value="3"></label>
+<button type="button" id="npManualRun">Run manual check</button>
+<button type="button" id="npManualRefresh">Refresh manual history</button>
+<pre id="npManualOutput" role="status" style="white-space:pre-wrap">Ready for a manual test.</pre>
+<pre id="npManualHistory" style="white-space:pre-wrap">No manual history loaded.</pre>
+</section><div class="status-buttons inline-control-row" hidden aria-hidden="true">
+<button class="btn secondary" id="btnShowConfig" title="Return to the current probe configuration after manual tests">
+              Show Current Configuration
+            </button>
+<select class="input-control" id="speedtestBackendSelect" style="min-width: 155px" title="Choose the backend for this manual run. Scheduled tests use SPEEDTEST_BACKEND.">
+<option value="python">Python (default)</option>
+<option value="ookla">Ookla (official; EULA)</option>
+</select>
+<input class="input-control" id="speedtestServerInput" inputmode="numeric" placeholder="Speedtest server ID (auto)" type="text"/>
+<label class="compact-checkbox" title="Use HTTPS when retrieving and testing Speedtest servers. HTTP and HTTPS may return different server IDs.">
+<input checked="" id="speedtestSecureCheckbox" type="checkbox"/>
+              Secure / HTTPS (Python)
+            </label>
+<label class="compact-checkbox" title="Ignore the configured single server or CSV pool for this one manual run and use automatic server selection. Global exclusions still apply.">
+<input id="speedtestForceAutoCheckbox" type="checkbox"/>
+              Force auto
+            </label>
+<button class="btn" id="btnRunSpeedtest">
+              Run Speedtest Now
+            </button>
+<button class="btn secondary" id="btnToggleLogs">
+              Follow Live Logs
+            </button>
+<div class="backend-notice" hidden="" id="speedtestBackendNotice">
+<strong>Official Ookla backend:</strong>
+<span id="ooklaInstallStatus">CLI status unknown</span> ·
+              <span id="ooklaAcceptanceStatus">terms status unknown</span>.
+              Use requires acceptance of Ookla's
+              <a href="https://www.speedtest.net/about/eula" rel="noopener noreferrer" target="_blank">EULA</a>,
+              <a href="https://www.speedtest.net/about/terms" rel="noopener noreferrer" target="_blank">Terms of Use</a>, and
+              <a href="https://www.speedtest.net/about/privacy" rel="noopener noreferrer" target="_blank">Privacy Policy</a>.
+              Run <code>netprobe-ookla-accept</code> interactively inside the container
+              to acknowledge the terms and install the official CLI if it is missing.
+              Administrators may also acknowledge with
+              <code>SPEEDTEST_OOKLA_ACCEPT_LICENSE=I_ACCEPT</code> and then run
+              <code>netprobe-ookla-accept --install</code>.
+            </div>
+</div></div>

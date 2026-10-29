@@ -1,0 +1,3 @@
+{# Page view: presentation only; metrics arrive through the JSON API. #}
+<section id="npSpeedPage" class="np-feature-page" hidden><div class="np-feature-head"><h2>Speedtest</h2><p>Latest measured bandwidth, scheduled testing and administrator-initiated on-demand runs.</p></div><article class="np-feature-card"><h3>Latest speed result</h3><div id="npSpeedDetails">Loading…</div></article><article class="np-feature-card" id="npSpeedActions">{% if is_admin %}<h3>Run a Speedtest</h3><p>Use a selected backend and optional server ID; the result is stored in Speedtest history.</p>{% else %}<p>Sign in as administrator to run a manual Speedtest.</p>{% endif %}</article></section>
+ 

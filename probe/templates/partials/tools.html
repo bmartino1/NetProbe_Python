@@ -1,0 +1,7 @@
+{# View-only HTML partial. Keep existing IDs for dashboard.js, main.js, and settings.js. #}
+<div class="np-scrim" hidden="" id="npScrim"></div><aside aria-hidden="true" aria-label="Tools, configuration and logs" class="np-drawer" id="npDrawer"><div class="np-drawer-top"><div><div class="np-eyebrow">ADMINISTRATION</div><h2>Diagnostics</h2></div><button aria-label="Close drawer" class="np-icon" id="npCloseTools" type="button">✕</button></div><div class="np-drawer-nav" hidden aria-hidden="true"><button class="active" data-tool="tests">Manual test</button><button data-tool="config">Config / output</button><button data-tool="logs">Live logs</button><button data-tool="layout">Customize</button></div>{% include 'tools/manual.html' %}
+{% include 'tools/configuration.html' %}
+
+{% include 'tools/logs.html' %}
+
+</div></aside></div>

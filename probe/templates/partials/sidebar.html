@@ -1,0 +1,22 @@
+{# View-only HTML partial. Keep existing IDs for dashboard.js, main.js, and settings.js. #}
+<aside class="np-sidebar" id="npSidebar" aria-label="Main navigation">
+  <div class="np-sidebar-brand"><img src="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png" alt="" width="30" height="30"><span>NetProbe</span></div>
+  <div class="np-sidebar-caption">MONITORING</div>
+  <nav class="np-sidebar-links" aria-label="Monitor pages">
+    <button type="button" class="np-side-link" data-sidebar-view="overview">◉ <span>Overview</span></button>
+    <button type="button" class="np-side-link" data-sidebar-view="metrics">◫ <span>Metrics</span></button>
+    <button type="button" class="np-side-link" data-sidebar-view="speedtest">⇅ <span>Speedtest</span></button>
+    <button type="button" class="np-side-link" data-sidebar-view="history">◷ <span>History</span></button>
+    <button type="button" class="np-side-link" data-sidebar-view="customize">▦ <span>Customize display</span></button>
+    <button type="button" class="np-side-link" data-sidebar-tool="config">≡ <span>Current configuration</span></button>
+  </nav>
+  {% if is_admin %}
+  <div class="np-sidebar-caption">ADMINISTRATION</div>
+  <nav class="np-sidebar-links" aria-label="Administration pages">
+    <button type="button" class="np-side-link" data-sidebar-tool="tests">⌁ <span>Manual tests</span></button>
+    <button type="button" class="np-side-link" data-sidebar-tool="logs">▤ <span>Logs &amp; diagnostics</span></button>
+    <button type="button" class="np-side-link" data-sidebar-settings="true">⚙ <span>Settings</span></button>
+  </nav>
+  {% endif %}
+  <div class="np-sidebar-bottom">{% if is_admin %}<span class="np-role">● Administrator</span>{% else %}<span class="np-role">● Guest · read only</span>{% endif %}<div class="np-sidebar-hint">Docker settings seed first boot. Saved WebUI settings remain authoritative.</div></div>
+</aside><button class="np-mobile-menu" type="button" id="npMobileMenu" aria-label="Toggle navigation">☰</button>

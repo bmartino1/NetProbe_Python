@@ -1,0 +1,9 @@
+{# Dashboard template: Flask injects current probe state and CSRF token.
+   main.js owns metric/chart updates; dashboard.js owns layout/navigation;
+   settings.js owns the admin modal. Preserve IDs used by those scripts. #}
+<!DOCTYPE html>
+<html lang="en"><head><link rel="icon" type="image/png" href="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png"><link rel="apple-touch-icon" href="https://raw.githubusercontent.com/bmartino1/unraid-docker-templates/main/images/netprobe.png"><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/><meta content="dark light" name="color-scheme"/><title>NetProbe 2.1 | Internet Quality Dashboard</title><script src="{{ url_for('static', filename='chart.js') }}"></script><link href="{{ url_for('static', filename='dashboard.css') }}" rel="stylesheet"/><meta name="netprobe-csrf" content="{{ csrf_token }}"></head><body data-admin="{{ 'true' if is_admin else 'false' }}" data-probe-interval="{{ probe_interval }}">{% include 'partials/sidebar.html' %}
+{% include 'partials/dashboard.html' %}
+{% include 'partials/tools.html' %}
+<script src="{{ url_for('static', filename='main.js') }}"></script><script src="{{ url_for('static', filename='dashboard.js') }}"></script>{% include 'partials/settings.html' %}
+{% if is_admin %}<script src="{{ url_for('static', filename='settings.js') }}"></script>{% endif %}</body></html>
