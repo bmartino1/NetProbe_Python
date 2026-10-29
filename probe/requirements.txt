@@ -1,5 +1,0 @@
-Flask
-dnspython
-speedtest-cli
-gunicorn
-psycopg2-binary
