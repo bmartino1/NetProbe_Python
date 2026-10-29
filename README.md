@@ -22,15 +22,41 @@ NetProbe monitors connectivity with scheduled **Ping/ICMP, DNS lookup timing, pa
 
 ## Screenshots
 
-<!-- Add screenshots to docs/screenshots/ when ready. Suggested names:
-01-setup-account.png, 02-login.png, 03-monitoring-setup.png,
-04-guest-overview.png, 05-metrics.png, 06-speedtest.png,
-07-history.png, 08-customize-display.png, 09-admin-settings.png.
-Replace this comment with a compact screenshot gallery, e.g.:
-![NetProbe Overview](docs/screenshots/04-guest-overview.png)
-![NetProbe Metrics](docs/screenshots/05-metrics.png)
-Do not expose passwords, authentication tokens, or sensitive hostnames/IP addresses.
--->
+# inital setup admin account and Login:
+<img width="1260" height="946" alt="image" src="https://github.com/user-attachments/assets/2fd9e2ba-1b4f-420c-936b-c9210aa86823" />
+
+<img width="1388" height="926" alt="image" src="https://github.com/user-attachments/assets/dbdcef31-98a9-45c1-81b3-b3ec9c2e8c9c" />
+
+# Admin First Login setup:
+<img width="1319" height="1081" alt="image" src="https://github.com/user-attachments/assets/31801f6f-bb39-4543-ab98-bd33e2a7bc1c" />
+
+# Guest read only
+<img width="1619" height="1272" alt="image" src="https://github.com/user-attachments/assets/3813f22c-55aa-4021-b453-9f73f5629264" />
+
+# Admin Manual Ping
+<img width="1707" height="1330" alt="Screenshot 2026-10-29 005233" src="https://github.com/user-attachments/assets/f94e36be-440b-40d5-9a7d-43583ec15536" />
+
+
+# Admin Logs and diags
+<img width="1704" height="1342" alt="Screenshot 2026-10-29 005252" src="https://github.com/user-attachments/assets/ed7716c8-ede8-4928-8d0d-c56825f6cc71" />
+
+
+# Admin Setting page
+<img width="1712" height="1347" alt="Screenshot 2026-10-29 005323" src="https://github.com/user-attachments/assets/d89114c4-e642-4fd4-aaf0-c48998223d2c" />
+<img width="1705" height="1342" alt="Screenshot 2026-10-29 005315" src="https://github.com/user-attachments/assets/47f9a8c3-ade7-4d32-b7f5-bcfec3839869" />
+<img width="1702" height="1353" alt="Screenshot 2026-10-29 005307" src="https://github.com/user-attachments/assets/6af1864a-25eb-4e56-8978-a4bc28d7e36b" />
+<img width="1700" height="1347" alt="Screenshot 2026-10-29 005300" src="https://github.com/user-attachments/assets/82d58188-afb7-4268-a90b-83274715bacc" />
+
+# Admin/Guest Pages
+
+<img width="1236" height="515" alt="Screenshot 2026-10-29 005108" src="https://github.com/user-attachments/assets/f169536b-e6b8-43c4-a45c-d6ab0ed300f0" />
+<img width="1701" height="555" alt="Screenshot 2026-10-29 005102" src="https://github.com/user-attachments/assets/013de37b-5d2d-42b7-9ec2-ccb60ff82bab" />
+<img width="1700" height="1297" alt="Screenshot 2026-10-29 005057" src="https://github.com/user-attachments/assets/19d9a646-5590-4310-8803-108c162823a4" />
+<img width="1699" height="1298" alt="Screenshot 2026-10-29 005203" src="https://github.com/user-attachments/assets/f41544d3-18cf-4463-ba5a-3b40872255a7" />
+<img width="1692" height="1297" alt="Screenshot 2026-10-29 005052" src="https://github.com/user-attachments/assets/f352b370-4ce6-4737-b093-5b9924736bc8" />
+<img width="1709" height="1296" alt="Screenshot 2026-10-29 005046" src="https://github.com/user-attachments/assets/54c2b83c-1e68-4477-8854-9e8d7b4b36dc" />
+<img width="1710" height="1349" alt="Screenshot 2026-10-29 005037" src="https://github.com/user-attachments/assets/af53f028-0e44-458a-81a7-75bd7dae72a4" />
+
 
 ## Quick start — SQLite (recommended)
 
