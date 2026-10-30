@@ -66,7 +66,7 @@ docker exec netprobe speedtest-cli --secure --list
 docker exec netprobe speedtest-cli --list
 ```
 
-Use an ID found through the **same protocol** as the manual run, or use **Force auto**, the candidate pool or server exclusions from Settings. If comparing host vs container, keep the backend and selected server the same. See [original issue #4](https://github.com/bmartino1/NetProbe_Python/issues/4) and the [regression checklist](ORIGINAL_ISSUES_TEST_PLAN.md).
+Use an ID found through the **same protocol** as the manual run, or use **Force auto**, the candidate pool or server exclusions from Settings. If comparing host vs container, keep the backend and selected server the same. See [original issue #4](https://github.com/bmartino1/NetProbe_Python/issues/4); the detailed regression checklist is retained in the private engineering archive.
 
 ## Manual tests versus scheduled monitoring
 
