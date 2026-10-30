@@ -1,0 +1,20 @@
+# Local deployment credentials (Docker Compose automatically loads .env).
+.env
+.env.*
+!.env.example
+
+# Python and editor/generated files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.idea/
+.vscode/
+*.log
+
+# Local runtime config/history should not be committed.
+config/
+data/
+*.sqlite
+*.sqlite3
